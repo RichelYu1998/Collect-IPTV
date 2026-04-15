@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import asyncio
+import ssl
 import time
 import json
 from collections import defaultdict
@@ -24,7 +25,7 @@ def normalize_text_for_match(text: str) -> str:
 
 # 配置
 CONFIG = {
-    "timeout": 10,  # Timeout in seconds
+    "timeout": 3,  # Timeout in seconds
     "max_parallel": 30,  # Max concurrent requests
     "output_file": "best_sorted.m3u",  # Output file for the sorted M3U
 }
@@ -711,12 +712,12 @@ def extract_urls_from_m3u(content):
 
 # 测试 IPTV 链接的可用性和速度
 async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str):
-    """测试 IPTV 链接的可用性和速度"""
+    """测试 IPTV 链接的可用性和速度 - 使用 HEAD 请求快速检测"""
     async with semaphore:
         start_time = time.time()
         try:
-            async with session.get(url, timeout=CONFIG["timeout"]) as response:
-                if response.status == 200:
+            async with session.head(url, timeout=CONFIG["timeout"], allow_redirects=True) as response:
+                if response.status < 400:
                     elapsed_time = time.time() - start_time
                     return True, elapsed_time
                 return False, None
@@ -907,8 +908,12 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
     all_valid_entries: List[Dict[str, Any]] = []
     semaphore = asyncio.Semaphore(CONFIG["max_parallel"])
 
-    timeout = aiohttp.ClientTimeout(total=CONFIG["timeout"])
-    connector = aiohttp.TCPConnector(limit=CONFIG["max_parallel"] * 2)
+    timeout = aiohttp.ClientTimeout(total=CONFIG["timeout"], connect=3)
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    connector = aiohttp.TCPConnector(limit=CONFIG["max_parallel"] * 2, ttl_dns_cache=300, ssl=ssl_context,
+                                     force_close=True, enable_cleanup_closed=True)
     async with aiohttp.ClientSession(cookie_jar=None, timeout=timeout, connector=connector) as session:
         online_geo_tokens = await load_online_geo_tokens(session, province_channels)
         if online_geo_tokens:
@@ -938,23 +943,13 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
 
 
 if __name__ == "__main__":
-    # IPTV 文件 URL（您可以添加自己的文件 URL 列表）
+    # IPTV 文件 URL（已筛选有效的源）
     file_urls = [
-        "https://tzdr.com/iptv.txt",
-        "https://live.kilvn.com/iptv.m3u",
         "https://cdn.jsdelivr.net/gh/Guovin/iptv-api@gd/output/result.txt",
         "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.m3u",
-        "http://175.178.251.183:6689/live.m3u",
         "https://raw.githubusercontent.com/suxuang/myIPTV/refs/heads/main/ipv4.m3u",
-        "https://m3u.ibert.me/ycl_iptv.m3u",
-        "https://tv.iill.top/m3u/Gather",
-        "https://live.zbds.org/tv/iptv4.m3u",
         "https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/ipv4/result.m3u",
-        "https://raw.githubusercontent.com/YueChan/Live/refs/heads/main/IPTV.m3u",
-        "https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u",
-        "https://raw.githubusercontent.com/BurningC4/Chinese-IPTV/master/TV-IPV4.m3u",
-        "https://raw.githubusercontent.com/zwc456baby/iptv_alive/refs/heads/master/live.m3u",
-        "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8"
+        "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8",
     ]
 
     # CCTV 频道文件（例如 IPTV/CCTV.txt）
