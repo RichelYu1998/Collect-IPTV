@@ -5,13 +5,16 @@ on:
   workflow_dispatch: 
 env:
   TZ: Asia/Shanghai
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   scrape-and-update:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
