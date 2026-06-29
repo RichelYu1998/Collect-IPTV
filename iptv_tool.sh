@@ -11,6 +11,8 @@ echo "========================================"
 echo "IPTV Live Stream Collection Tool - v${VERSION}"
 echo "========================================"
 
+SCRIPT_START_TIME=$(date +%s)
+
 VENV_PATH=".venv"
 FASTEST_PIP_MIRROR=""
 
@@ -21,6 +23,20 @@ export IPTV_TIMEOUT="${IPTV_TIMEOUT:-3}"
 export IPTV_MAX_PARALLEL="${IPTV_MAX_PARALLEL:-30}"
 export IPTV_PROXY_TIMEOUT="${IPTV_PROXY_TIMEOUT:-15}"
 export IPTV_TRANSCODE_SESSION_TIMEOUT="${IPTV_TRANSCODE_SESSION_TIMEOUT:-600}"
+
+show_step_time() {
+    local step_name="$1"
+    local step_start="$2"
+    local now=$(date +%s)
+    local diff=$((now - step_start))
+    if [ "$diff" -ge 60 ]; then
+        local mins=$((diff / 60))
+        local secs=$((diff % 60))
+        echo "[*] $step_name took: ${mins}m ${secs}s"
+    else
+        echo "[*] $step_name took: ${diff}s"
+    fi
+}
 
 detect_python_env() {
     echo ""
@@ -345,6 +361,7 @@ run_collection() {
     echo "========================================"
     echo ""
 
+    COLLECT_START=$(date +%s)
     source "$VENV_PATH/bin/activate"
     $PYTHON_CMD .github/workflows/iptv.py
 
@@ -353,6 +370,8 @@ run_collection() {
         echo "ERROR: Script execution failed"
         exit 1
     fi
+
+    show_step_time "IPTV Collection" "$COLLECT_START"
 
     echo ""
     echo "========================================"
@@ -374,6 +393,8 @@ run_collection() {
     echo "Tips:"
     echo "   - Use M3U-compatible players to open generated files"
     echo "   - Recommended: VLC, mpv, Kodi, IINA, etc."
+
+    show_step_time "Total" "$SCRIPT_START_TIME"
     echo ""
 }
 
@@ -457,10 +478,19 @@ main() {
     cd "$WORK_DIR"
 
     detect_python_env || exit 1
+
+    STEP_START=$(date +%s)
     detect_ffmpeg
+    show_step_time "FFmpeg Detection" "$STEP_START"
+
+    STEP_START=$(date +%s)
     test_pip_mirrors
+    show_step_time "PIP Mirror Test" "$STEP_START"
+
+    STEP_START=$(date +%s)
     detect_venv
     setup_venv
+    show_step_time "Venv Setup" "$STEP_START"
 
     case "${1:-}" in
         --collect)

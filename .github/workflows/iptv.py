@@ -1075,6 +1075,23 @@ if __name__ == "__main__":
     if os.path.isdir(os.path.join(project_root, '.github')):
         os.chdir(project_root)
 
-    file_urls = asyncio.run(_select_fastest_source_cdns(IPTV_SOURCE_CDNS))
+    total_start = time.time()
 
+    cdn_start = time.time()
+    file_urls = asyncio.run(_select_fastest_source_cdns(IPTV_SOURCE_CDNS))
+    cdn_elapsed = time.time() - cdn_start
+    print(f"CDN speed test took: {cdn_elapsed:.1f}s")
+
+    collect_start = time.time()
     asyncio.run(main(file_urls, cctv_channel_file, province_channel_files))
+    collect_elapsed = time.time() - collect_start
+    if collect_elapsed >= 60:
+        print(f"Stream collection took: {int(collect_elapsed//60)}m {int(collect_elapsed%60)}s")
+    else:
+        print(f"Stream collection took: {collect_elapsed:.1f}s")
+
+    total_elapsed = time.time() - total_start
+    if total_elapsed >= 60:
+        print(f"Total iptv.py took: {int(total_elapsed//60)}m {int(total_elapsed%60)}s")
+    else:
+        print(f"Total iptv.py took: {total_elapsed:.1f}s")

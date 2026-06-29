@@ -11,6 +11,10 @@ echo ========================================
 echo IPTV Live Stream Collection Tool - v%VERSION%
 echo ========================================
 
+for /f "tokens=*" %%t in ('py -c "import time;print(time.time())" 2^>nul') do set "SCRIPT_START_TIME=%%t"
+if not defined SCRIPT_START_TIME for /f "tokens=*" %%t in ('python -c "import time;print(time.time())" 2^>nul') do set "SCRIPT_START_TIME=%%t"
+if not defined SCRIPT_START_TIME set "SCRIPT_START_TIME=0"
+
 set "VENV_PATH=.venv"
 set "FASTEST_PIP_MIRROR="
 
@@ -29,11 +33,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
+for /f "tokens=*" %%t in ('%PYTHON_CMD% -c "import time;print(time.time())" 2^>nul') do set "STEP_START=%%t"
 call :detect_ffmpeg
+call :show_step_time "FFmpeg Detection" "%STEP_START%"
 
+for /f "tokens=*" %%t in ('%PYTHON_CMD% -c "import time;print(time.time())" 2^>nul') do set "STEP_START=%%t"
 call :test_pip_mirrors
+call :show_step_time "PIP Mirror Test" "%STEP_START%"
+
+for /f "tokens=*" %%t in ('%PYTHON_CMD% -c "import time;print(time.time())" 2^>nul') do set "STEP_START=%%t"
 call :detect_venv
 call :setup_venv
+call :show_step_time "Venv Setup" "%STEP_START%"
 
 if "%1"=="--collect" set "COLLECT_ONLY=1" & goto run_collection_only
 set "COLLECT_ONLY=0"
@@ -437,6 +448,7 @@ echo Starting IPTV stream collection...
 echo ========================================
 echo.
 
+for /f "tokens=*" %%t in ('%PYTHON_CMD% -c "import time;print(time.time())" 2^>nul') do set "COLLECT_START=%%t"
 call %VENV_PATH%\Scripts\activate.bat
 %PYTHON_CMD% .github\workflows\iptv.py
 
@@ -447,11 +459,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+call :show_step_time "IPTV Collection" "%COLLECT_START%"
+
 echo.
 echo ========================================
 echo IPTV Collection Complete!
 echo ========================================
-echo.
 
 if exist "best_sorted.m3u" (
     echo Generated M3U file: best_sorted.m3u
@@ -462,6 +475,8 @@ if exist "best_sorted.m3u8" (
     echo Generated M3U8 file: best_sorted.m3u8
     for %%F in (best_sorted.m3u8) do echo    File size: %%~zF bytes
 )
+
+call :show_step_time "Total" "%SCRIPT_START_TIME%"
 
 echo.
 exit /b 0
@@ -536,4 +551,12 @@ call %VENV_PATH%\Scripts\activate.bat
 cd /d "%~dp0"
 %PYTHON_CMD% "%~dp0server.py" %SERVER_PORT%
 pause
+exit /b 0
+
+:show_step_time
+set "STEP_NAME=%~1"
+set "STEP_START_RAW=%~2"
+for /f "tokens=*" %%d in ('%PYTHON_CMD% -c "import time; d=time.time()-float('%STEP_START_RAW%'); print(f'{int(d//60)}m {int(d%%60)}s' if d>=60 else f'{d:.1f}s')" 2^>nul') do set "STEP_DURATION=%%d"
+if not defined STEP_DURATION set "STEP_DURATION=?"
+echo [*] %STEP_NAME% took: %STEP_DURATION%
 exit /b 0
