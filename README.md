@@ -746,7 +746,7 @@ By using this project, users agree that they **bear all risk** for any misuse. T
 
 ## 📺️TV station list
 
-https://zilong7728.github.io/Collect-IPTV/
+https://github.com/RichelYu1998/Collect-IPTV
 
 ## ⏱️Last Run Time
 
@@ -754,9 +754,9 @@ https://zilong7728.github.io/Collect-IPTV/
 
 ## 🔗Generated File Link
 
-<!-- Generated File Link --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u)
+<!-- Generated File Link --> [View Generated File](https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/refs/heads/main/best_sorted.m3u)
 
-<!-- Generated File Link m3u8 --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u8)
+<!-- Generated File Link m3u8 --> [View Generated File](https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/refs/heads/main/best_sorted.m3u8)
 
 ## 💡 使用说明
 
@@ -773,8 +773,7 @@ https://zilong7728.github.io/Collect-IPTV/
 
 ## 📞 技术支持
 
-- 🌐 项目主页：https://zilong7728.github.io/Collect-IPTV/
-- 💻 GitHub仓库：https://github.com/zilong7728/Collect-IPTV
+- 💻 GitHub仓库：https://github.com/RichelYu1998/Collect-IPTV
 - 📧 问题反馈：通过GitHub Issues提交
 
 ## 📝 更新日志
@@ -905,7 +904,7 @@ https://zilong7728.github.io/Collect-IPTV/
 
 ## ⭐️Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zilong7728/Collect-IPTV&type=Date)](https://star-history.com/#zilong7728/Collect-IPTV&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=RichelYu1998/Collect-IPTV&type=Date)](https://star-history.com/#RichelYu1998/Collect-IPTV&Date)
 
 ## 🎉 开始使用
 
@@ -1227,7 +1226,7 @@ python .github/workflows/iptv.py --setup-ffmpeg
 
 1. 查看日志输出中的错误信息
 2. 运行 `python .github/workflows/iptv.py --help` 查看帮助信息
-3. 在 GitHub 提交 Issue: https://github.com/zilong7728/Collect-IPTV/issues
+3. 在 GitHub 提交 Issue: https://github.com/RichelYu1998/Collect-IPTV/issues
 
 ---
 
