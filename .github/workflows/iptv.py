@@ -22,6 +22,8 @@ logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FFMPEG_DIR = PROJECT_ROOT / 'ffmpeg'
+STREAM_CACHE_FILE = PROJECT_ROOT / '.stream_cache.json'
+STREAM_CACHE_TTL = 4 * 3600  # 流测试缓存有效期：4小时
 
 
 def _suppress_asyncio_exception(loop, context):
@@ -50,12 +52,12 @@ def normalize_text_for_match(text: str) -> str:
 
 # 配置
 CONFIG = {
-    "timeout": int(os.environ.get("IPTV_TIMEOUT", "5")),
+    "timeout": int(os.environ.get("IPTV_TIMEOUT", "3")),
     "max_parallel": int(os.environ.get("IPTV_MAX_PARALLEL", "200")),
-    "output_file": os.environ.get("IPTV_OUTPUT_FILE", "best_sorted.m3u"),
-    "connect_timeout": int(os.environ.get("IPTV_CONNECT_TIMEOUT", "3")),
+    "output_file": os.environ.get("IPTV_OUTPUT_FILE", "file/best_sorted.m3u"),
+    "connect_timeout": int(os.environ.get("IPTV_CONNECT_TIMEOUT", "2")),
     "dns_cache_ttl": int(os.environ.get("IPTV_DNS_CACHE_TTL", "300")),
-    "source_cdn_test_timeout": int(os.environ.get("IPTV_SOURCE_CDN_TIMEOUT", "3")),
+    "source_cdn_test_timeout": int(os.environ.get("IPTV_SOURCE_CDN_TEST_TIMEOUT", "2")),
     "cdn_cache_ttl_hours": int(os.environ.get("IPTV_CDN_CACHE_TTL", "6")),
 }
 
@@ -1122,9 +1124,45 @@ def extract_urls_from_m3u(content):
     return urls
 
 
-# 测试 IPTV 链接的可用性和速度
-async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str):
-    """测试 IPTV 链接的可用性和速度 - 使用 GET 请求读取少量数据快速检测"""
+def load_stream_cache():
+    """加载流测试结果缓存"""
+    if STREAM_CACHE_FILE.exists():
+        try:
+            cache_age = time.time() - STREAM_CACHE_FILE.stat().st_mtime
+            if cache_age < STREAM_CACHE_TTL:
+                with open(STREAM_CACHE_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                print(f"Loaded stream cache: {len(data)} entries (age: {cache_age/60:.0f}min)")
+                return data
+            else:
+                print(f"Stream cache expired (age: {cache_age/3600:.1f}h > {STREAM_CACHE_TTL/3600}h)")
+        except Exception as e:
+            print(f"Failed to load stream cache: {e}")
+    else:
+        print("No stream cache found")
+    return {}
+
+
+def save_stream_cache(cache_data):
+    """保存流测试结果缓存"""
+    try:
+        with open(STREAM_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f)
+        print(f"Saved stream cache: {len(cache_data)} entries to {STREAM_CACHE_FILE.name}")
+    except Exception as e:
+        print(f"Failed to save stream cache: {e}")
+
+
+# 测试 IPTV 链接的可用性和速度（带缓存）
+async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, stream_cache=None):
+    """测试 IPTV 链接的可用性和速度 - 使用 GET 请求读取少量数据快速检测，支持结果缓存"""
+    if stream_cache is not None and url in stream_cache:
+        cached_result = stream_cache[url]
+        if cached_result["valid"]:
+            return True, cached_result.get("latency", 0.01)
+        else:
+            return False, None
+
     async with semaphore:
         start_time = time.time()
         try:
@@ -1135,11 +1173,16 @@ async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semapho
                     except Exception:
                         pass
                     elapsed_time = time.time() - start_time
+                    if stream_cache is not None:
+                        stream_cache[url] = {"valid": True, "latency": elapsed_time, "timestamp": time.time()}
                     return True, elapsed_time
-                return False, None
-        except asyncio.TimeoutError:
-            return False, None
-        except Exception:
+                else:
+                    if stream_cache is not None:
+                        stream_cache[url] = {"valid": False, "latency": None, "timestamp": time.time()}
+                    return False, None
+        except (asyncio.TimeoutError, Exception) as e:
+            if stream_cache is not None:
+                stream_cache[url] = {"valid": False, "latency": None, "timestamp": time.time(), "error": str(type(e).__name__)}
             return False, None
 
 
@@ -1147,10 +1190,11 @@ async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semapho
 async def test_multiple_streams(
     session: aiohttp.ClientSession,
     semaphore: asyncio.Semaphore,
-    entries: Iterable[Dict[str, Any]]
+    entries: Iterable[Dict[str, Any]],
+    stream_cache=None
 ):
     """测试多个 IPTV 链接"""
-    tasks = [test_stream(session, semaphore, str(entry.get("url", "")).strip()) for entry in entries]
+    tasks = [test_stream(session, semaphore, str(entry.get("url", "")).strip(), stream_cache) for entry in entries]
     results = await asyncio.gather(*tasks)
     return results
 
@@ -1160,7 +1204,8 @@ async def read_and_test_file(
     session: aiohttp.ClientSession,
     semaphore: asyncio.Semaphore,
     file_path: str,
-    is_m3u: bool = False
+    is_m3u: bool = False,
+    stream_cache=None
 ):
     """读取文件并提取 URL 进行测试"""
     try:
@@ -1176,7 +1221,7 @@ async def read_and_test_file(
         entries = deduplicate_candidate_entries(entries)
 
         valid_entries: List[Dict[str, Any]] = []
-        results = await test_multiple_streams(session, semaphore, entries)
+        results = await test_multiple_streams(session, semaphore, entries, stream_cache)
         for (is_valid, latency), entry in zip(results, entries):
             if is_valid:
                 valid_entries.append({
@@ -1416,14 +1461,17 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
         else:
             print("Online geo tokens unavailable, fallback to local province txt only.")
 
+        stream_cache = load_stream_cache()
         tasks = []
         for file_url in file_urls:
             is_m3u = file_url.endswith(('.m3u', '.m3u8'))
-            tasks.append(read_and_test_file(session, semaphore, file_url, is_m3u=is_m3u))
+            tasks.append(read_and_test_file(session, semaphore, file_url, is_m3u=is_m3u, stream_cache=stream_cache))
 
         results = await asyncio.gather(*tasks)
         for valid_entries in results:
             all_valid_entries.extend(valid_entries)
+
+    save_stream_cache(stream_cache)
 
     deduplicated_entries = deduplicate_candidate_entries(all_valid_entries)
     best_entries = select_best_streams(deduplicated_entries)
