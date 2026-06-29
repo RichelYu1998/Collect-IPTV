@@ -36,27 +36,32 @@ chmod +x iptv_tool.sh
 ./iptv_tool.sh
 ```
 
-### 📋 功能菜单
+### 🔄 自动运行流程
+
+双击脚本即可，无需手动操作：
 
 ```
-============================================================
-       IPTV Live Stream Collection Tool - Complete Version
-============================================================
-
-Menu:
-
-  [1] Environment Check and Configuration
-  [2] Virtual Environment Management
-  [3] Run IPTV Collection
-  [4] Start Local Web Server
-  [5] Setup Scheduled Task
-  [6] View Generated Files
-  [7] Clean Temporary Files
-  [8] View Help Documentation
-  [0] Exit Program
+[1/5] 检测Python环境（未安装则自动安装）
+[2/5] 测试PIP镜像源速度（自动选择最快镜像）
+[3/5] 检测Python虚拟环境
+[4/5] 设置虚拟环境并安装依赖
+[5/5] 注册定时任务（每4小时自动采集）→ 启动本地网页服务
 ```
 
-### 🎯 智能分类系统
+**启动后自动**：
+- ✅ 注册系统定时任务（Windows: 任务计划程序 / Linux: crontab），每4小时自动运行采集
+- ✅ 启动本地网页服务 http://localhost:8000
+
+### 📋 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| 无参数 | 注册定时任务 + 启动Web服务器（默认） |
+| `--collect` | 仅运行IPTV采集（定时任务内部调用） |
+
+---
+
+## 🎯 智能分类系统
 
 - **央视频道**：CCTV-1到CCTV-16、CGTN、CHC等
 - **省市频道**：全国31个省市自治区频道
@@ -64,22 +69,24 @@ Menu:
 - **港澳台频道**：翡翠台、明珠台、东森、中天等
 - **文旅频道**：景区、风景、观光等特色频道
 
-### 🔍 质量筛选机制
+## 🔍 质量筛选机制
 
 - **可用性测试**：实时检测直播源是否可访问
 - **延迟测量**：测试响应时间，优选低延迟源
 - **智能去重**：自动识别和合并重复频道
 - **并发测试**：支持30个并发连接，提高测试效率
 
-### 📁 生成的文件
+## 📁 生成的文件
 
 运行成功后，会在项目根目录生成：
 - **best_sorted.m3u** - M3U格式播放列表
 - **best_sorted.m3u8** - M3U8格式播放列表
 
-### 🎬 使用生成的播放列表
+---
 
-#### 推荐播放器
+## 🎬 使用生成的播放列表
+
+### 推荐播放器
 
 **Windows**：
 - **PotPlayer** - 功能强大，支持多种格式
@@ -96,61 +103,80 @@ Menu:
 - **IINA** - 现代化，界面美观
 - **mpv** - 轻量级，键盘友好
 
-#### 导入播放列表
+### 导入播放列表
 
 1. 打开播放器
 2. 找到"打开文件"或"导入播放列表"选项
 3. 选择生成的 `best_sorted.m3u` 或 `best_sorted.m3u8` 文件
 4. 开始观看直播
 
-### 📖 详细文档
+---
 
-- **[IPTV_TOOL_GUIDE.md](IPTV_TOOL_GUIDE.md)** - 完整使用指南
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)** - 项目总结和测试结果
-- **[TOOL_README.md](TOOL_README.md)** - 工具快速开始指南
+## 📂 项目文件说明
+
+### 核心脚本
+
+| 文件名 | 平台 | 说明 |
+|--------|------|------|
+| [iptv_tool.bat](iptv_tool.bat) | Windows | 一键启动工具 |
+| [iptv_tool.sh](iptv_tool.sh) | Linux/macOS | 一键启动工具 |
+
+### 核心文件
+
+| 文件名 | 说明 |
+|--------|------|
+| [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本 |
+| [.github/workflows/index.html](.github/workflows/index.html) | 网页界面 |
+| [.github/workflows/IPTV/](.github/workflows/IPTV/) | 频道配置目录 |
+
+### 生成文件
+
+| 文件名 | 说明 |
+|--------|------|
+| best_sorted.m3u | M3U格式播放列表 |
+| best_sorted.m3u8 | M3U8格式播放列表 |
 
 ---
 
-## 📢 免责声明（个人学习测试专用）
+## 🔧 高级配置
 
-本项目仅用于**网络协议、爬虫技术、自动化脚本开发等个人学习与测试用途**，不用于任何商业、盈利及违规用途。
+### 修改IPTV源列表
 
-- 所有节目源均来自互联网公开可访问链接，项目本身不生产、不存储、不篡改任何媒体内容。  
-- 严禁将本项目及生成的播放列表用于商业传播、二次分发、公开分享等行为。  
-- 所有频道版权均归原版权方所有，使用前请确保符合当地法律法规。  
-- 因违规使用本项目产生的任何法律责任、版权纠纷，均由使用者自行承担。
+编辑 [.github/workflows/iptv.py](.github/workflows/iptv.py) 文件中的 `file_urls` 列表：
 
-详细免责声明请参阅 [`DISCLAIMER.md`](./DISCLAIMER.md)。
+```python
+file_urls = [
+    "https://tzdr.com/iptv.txt",
+    "https://live.kilvn.com/iptv.m3u",
+    # 添加更多源...
+]
+```
+
+### 调整采集参数
+
+编辑 [.github/workflows/iptv.py](.github/workflows/iptv.py) 中的配置：
+
+```python
+CONFIG = {
+    "timeout": 10,           # 超时时间（秒）
+    "max_parallel": 30,      # 最大并发请求数
+    "output_file": "best_sorted.m3u",  # 输出文件名
+}
+```
+
+### 自定义频道分类
+
+编辑 [.github/workflows/IPTV/](.github/workflows/IPTV/) 目录下的频道配置文件：
+
+```
+# 每行一个频道名称
+CCTV-1
+CCTV-2
+北京卫视
+上海卫视
+```
 
 ---
-
-## 📺️TV station list
-
-https://zilong7728.github.io/Collect-IPTV/
-
-## ⏱️Last Run Time
-
-<!-- Last Run Time --> 2026-04-15 09:31:45 CST
-
-## 🔗Generated File Link
-
-<!-- Generated File Link --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u)
-
-<!-- Generated File Link m3u8 --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u8)
-
-## 💡 使用说明
-
-### 在线使用
-1. 点击上方「下载 M3U/M3U8 文件」获取最新节目源
-2. 将文件导入支持 IPTV 的播放器（如 Kodi、PotPlayer、Perfect Player 等）
-3. 节目源每 4 小时自动更新，建议定期重新下载
-
-### 本地使用
-1. 运行本地工具：`iptv_tool.bat` (Windows) 或 `./iptv_tool.sh` (Linux/macOS)
-2. 选择 `[3]` 运行IPTV采集
-3. 选择 `[4]` 启动本地网页服务
-4. 访问 http://localhost:8000 查看网页界面
-5. 使用生成的播放列表观看直播
 
 ## 🐛 常见问题
 
@@ -174,6 +200,9 @@ sudo apt-get install python3 python3-pip
 
 # CentOS/RHEL
 sudo yum install python3 python3-pip
+
+# Arch Linux
+sudo pacman -S python python-pip
 ```
 
 **macOS**：
@@ -192,6 +221,13 @@ python3 -m ensurepip --upgrade
 
 # 手动创建虚拟环境
 python3 -m venv venv
+
+# 激活虚拟环境
+# Windows
+venv\Scripts\activate
+
+# Linux/macOS
+source venv/bin/activate
 ```
 
 ### 3. 依赖安装失败
@@ -230,37 +266,72 @@ pip3 install aiohttp --user
 - 尝试更换其他IPTV源
 - 检查防火墙设置
 
+### 5. 权限问题（Linux/macOS）
+
+**问题**：提示权限不足
+
+**解决方法**：
+```bash
+# 添加执行权限
+chmod +x iptv_tool.sh
+
+# 创建虚拟环境时可能需要sudo
+sudo python3 -m venv venv
+```
+
+### 6. 网页服务无法访问
+
+**问题**：无法访问http://localhost:8000
+
+**解决方法**：
+- 确保网页服务已启动
+- 检查端口8000是否被占用
+- 尝试使用其他端口：`python -m http.server 8080`
+- 检查防火墙设置
+
+### 7. 定时任务问题
+
+**Windows**：检查任务计划程序中 `IPTV_Collection` 任务是否存在
+```cmd
+schtasks /query /tn "IPTV_Collection"
+```
+
+**Linux/macOS**：检查crontab中是否有对应条目
+```bash
+crontab -l | grep iptv_tool
+```
+
+---
+
 ## 📊 测试结果
 
 ### ✅ 环境检测测试
 ```
-[1/6] Checking Python environment...
-OK: Python version 3.14.3 (command: py)
+[1/5] Detecting Python environment...
+Python: Python 3.14.3
 
-[2/6] Checking virtual environment...
-OK: Virtual environment detected: .venv
+[2/5] Testing PIP mirror sources...
+    Testing Tsinghua...        0.045s (45ms)
+    Testing Aliyun...          0.032s (32ms)
+    Testing Douban...          0.051s (51ms)
+    Testing USTC...            0.038s (38ms)
+[*] Fastest PIP mirror: Aliyun (32ms)
 
-[3/6] Checking dependencies...
-OK: aiohttp dependency is installed
+[3/5] Detecting Python virtual environment...
+Found virtual environment: .venv
 
-[4/6] Checking script files...
-OK: iptv.py script file exists
-OK: index.html web file exists
+[4/5] Setting up Python virtual environment and installing dependencies...
+Python virtual environment setup complete
 
-[5/6] Checking IPTV configuration directory...
-OK: IPTV configuration directory exists
-OK: CCTV channel configuration file exists
-OK: Provincial channel configuration files: 33
-
-[6/6] Checking network connection...
-OK: Network connection is normal
+[5/5] Registering scheduled task...
+[*] Scheduled task created successfully!
 ```
 
 ### ✅ IPTV采集测试
 ```
-Loaded 6443 online geo tokens from: https://fastly.jsdelivr.net/gh/modood/Administrative-divisions-of-China/dist/pca-code.json
+Loaded 6443 online geo tokens from: https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json
 Online geo classification tokens merged.
-Valid streams: 1976, deduplicated: 1127, best-per-channel: 678
+Valid streams: 1780, deduplicated: 1137, best-per-channel: 662
 Generated sorted M3U file: best_sorted.m3u
 ```
 
@@ -269,11 +340,65 @@ Generated sorted M3U file: best_sorted.m3u
 Serving HTTP on :: port 8000 (http://[::]:8000/) ...
 ```
 
-访问地址：http://localhost:8000/index.html
+访问地址：http://localhost:8000
+
+---
+
+## 📢 免责声明（个人学习测试专用）
+
+本项目仅用于**网络协议、爬虫技术、自动化脚本开发等个人学习与测试用途**，不用于任何商业、盈利及违规用途。
+
+- 所有节目源均来自互联网公开可访问链接，项目本身不生产、不存储、不篡改任何媒体内容。  
+- 严禁将本项目及生成的播放列表用于商业传播、二次分发、公开分享等行为。  
+- 所有频道版权均归原版权方所有，使用前请确保符合当地法律法规。  
+- 因违规使用本项目产生的任何法律责任、版权纠纷，均由使用者自行承担。
+
+### Restrictions
+
+Users **must not**:
+- Redistribute the project or generated playlists for commercial purposes
+- Share or publicly distribute the playlists
+- Use the project for any activity that violates applicable laws
+
+### Copyright
+
+All channels and media resources remain the property of their respective copyright holders. The project author **assumes no responsibility** for any legal issues or copyright disputes arising from improper use.
+
+### Liability
+
+By using this project, users agree that they **bear all risk** for any misuse. The author or repository owner **is not liable** for any damages or legal consequences.
+
+---
+
+## 📺️TV station list
+
+https://zilong7728.github.io/Collect-IPTV/
+
+## ⏱️Last Run Time
+
+<!-- Last Run Time --> 2026-04-15 09:31:45 CST
+
+## 🔗Generated File Link
+
+<!-- Generated File Link --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u)
+
+<!-- Generated File Link m3u8 --> [View Generated File](https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/best_sorted.m3u8)
+
+## 💡 使用说明
+
+### 在线使用
+1. 点击上方「下载 M3U/M3U8 文件」获取最新节目源
+2. 将文件导入支持 IPTV 的播放器（如 Kodi、PotPlayer、Perfect Player 等）
+3. 节目源每 4 小时自动更新，建议定期重新下载
+
+### 本地使用
+1. 运行本地工具：`iptv_tool.bat` (Windows) 或 `./iptv_tool.sh` (Linux/macOS)
+2. 脚本自动完成：环境检测 → 注册定时任务 → 启动网页服务
+3. 访问 http://localhost:8000 查看网页界面
+4. 使用生成的播放列表观看直播
 
 ## 📞 技术支持
 
-- 📖 详细文档：[IPTV_TOOL_GUIDE.md](IPTV_TOOL_GUIDE.md)
 - 🌐 项目主页：https://zilong7728.github.io/Collect-IPTV/
 - 💻 GitHub仓库：https://github.com/zilong7728/Collect-IPTV
 - 📧 问题反馈：通过GitHub Issues提交
@@ -284,7 +409,7 @@ Serving HTTP on :: port 8000 (http://[::]:8000/) ...
 - ✅ 新增跨平台本地运行工具
 - ✅ 新增虚拟环境检测和管理
 - ✅ 新增本地网页服务
-- ✅ 新增定时任务配置
+- ✅ 新增定时任务自动注册
 - ✅ 整合所有功能到单一脚本文件
 - ✅ 优化用户界面和交互体验
 - ✅ 完善错误处理和日志输出
@@ -303,17 +428,13 @@ Serving HTTP on :: port 8000 (http://[::]:8000/) ...
 
 ## 🎉 开始使用
 
-现在您已经了解了所有功能，可以开始使用IPTV直播源自动采集工具了！
-
 **推荐流程**：
-1. 运行环境检测
-2. 创建虚拟环境
-3. 运行IPTV采集
-4. 启动本地网页服务
-5. 配置定时任务（可选）
-6. 享受观看IPTV直播！
+1. 双击 `iptv_tool.bat` (Windows) 或运行 `./iptv_tool.sh` (Linux/macOS)
+2. 脚本自动完成所有配置
+3. 访问 http://localhost:8000 查看频道
+4. 享受观看IPTV直播！
 
-**需要帮助？** 查看详细文档或通过GitHub Issues提交问题。
+**需要帮助？** 通过GitHub Issues提交问题。
 
 ---
 
@@ -325,7 +446,7 @@ Serving HTTP on :: port 8000 (http://[::]:8000/) ...
 - ✅ **跨平台支持**：Windows、Linux、macOS全部支持
 - ✅ **文档完善**：提供详细的使用指南和故障排除
 - ✅ **性能优化**：支持并发采集和智能筛选
-- ✅ **用户友好**：提供完整的菜单系统和网页界面
+- ✅ **用户友好**：一键启动，全自动运行
 
 ---
 

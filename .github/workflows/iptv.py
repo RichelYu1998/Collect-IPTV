@@ -1,4 +1,5 @@
 import os
+import logging
 import aiohttp
 import asyncio
 import ssl
@@ -7,6 +8,19 @@ import json
 from collections import defaultdict
 import re
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Any
+
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
+logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
+
+
+def _suppress_asyncio_exception(loop, context):
+    exception = context.get("exception")
+    message = context.get("message", "")
+    if exception and isinstance(exception, (OSError, ConnectionError)):
+        return
+    if "shielded future" in message or "call_connection_lost" in message:
+        return
+    loop.default_exception_handler(context)
 
 def contains_date(text):
     """
@@ -899,6 +913,8 @@ def load_province_channels(files):
 # 主函数：处理多个文件并生成 M3U 输出
 async def main(file_urls, cctv_channel_file, province_channel_files):
     """主函数处理多个文件"""
+    asyncio.get_event_loop().set_exception_handler(_suppress_asyncio_exception)
+
     # 加载 CCTV 频道列表
     cctv_channels = load_cctv_channels(cctv_channel_file)
 

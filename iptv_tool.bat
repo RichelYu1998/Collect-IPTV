@@ -1,409 +1,307 @@
 @echo off
-chcp 65001 >nul
-title IPTV Tool - Complete Version
-
 setlocal enabledelayedexpansion
+chcp 65001 > nul 2>&1
+set PYTHONIOENCODING=utf-8
+title IPTV Live Stream Collection Tool
 
-REM ========================================
-REM IPTV Live Stream Collection Tool - Windows Complete Version
-REM Functions: Environment Check, Virtual Environment, Data Collection, Web Service
-REM ========================================
+for /f "delims=" %%i in ('py -c "import re; m=re.search(r'###\s+v([\d.]+)', open('README.md', encoding='utf-8').read()); print(m.group(1) if m else '0.0.0')" 2^>nul') do set VERSION=%%i
+if not defined VERSION set VERSION=0.0.0
 
-:main_menu
-cls
-echo.
-echo ============================================================
-echo        IPTV Live Stream Collection Tool - Complete Version
-echo ============================================================
-echo.
-echo Menu:
-echo.
-echo   [1] Environment Check and Configuration
-echo   [2] Virtual Environment Management
-echo   [3] Run IPTV Collection
-echo   [4] Start Local Web Server
-echo   [5] Setup Scheduled Task
-echo   [6] View Generated Files
-echo   [7] Clean Temporary Files
-echo   [8] View Help Documentation
-echo   [0] Exit Program
-echo.
-set /p choice="Please select function (0-8): "
+echo ========================================
+echo IPTV Live Stream Collection Tool - v%VERSION%
+echo ========================================
 
-if "%choice%"=="1" goto check_environment
-if "%choice%"=="2" goto venv_management
-if "%choice%"=="3" goto run_collection
-if "%choice%"=="4" goto start_web_server
-if "%choice%"=="5" goto setup_scheduled_task
-if "%choice%"=="6" goto view_files
-if "%choice%"=="7" goto cleanup
-if "%choice%"=="8" goto show_help
-if "%choice%"=="0" goto exit_program
+set "VENV_PATH=.venv"
+set "FASTEST_PIP_MIRROR="
 
-echo.
-echo Invalid option, please try again
-timeout /t 2 >nul
-goto main_menu
-
-:check_environment
-cls
-echo.
-echo ============================================================
-echo   Environment Check and Configuration
-echo ============================================================
-echo.
-
-REM Check Python environment
-echo [1/6] Checking Python environment...
-set PYTHON_CMD=
-where python >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python
-    goto :python_found
+call :detect_python_env
+if errorlevel 1 (
+    pause
+    exit /b 1
 )
-where python3 >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python3
-    goto :python_found
-)
+
+call :test_pip_mirrors
+call :detect_venv
+call :setup_venv
+
+if "%1"=="--collect" goto run_collection
+goto setup_scheduled_task_and_web
+
+:detect_python_env
+echo.
+echo ========================================
+echo Environment Detection and Configuration
+echo ========================================
+
+echo [1/5] Detecting Python environment...
+
 where py >nul 2>&1
-if %errorlevel% equ 0 (
+if errorlevel 1 (
+    where python >nul 2>&1
+    if errorlevel 1 (
+        echo Python not in PATH, searching system...
+
+        if exist "C:\Python3*\python.exe" (
+            for /d %%p in ("C:\Python3*") do set "PYTHON_PATH=%%~dp0python.exe"
+        ) else if exist "C:\Program Files\Python3*\python.exe" (
+            for /d %%p in ("C:\Program Files\Python3*") do set "PYTHON_PATH=%%~dp0python.exe"
+        ) else if exist "C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python3*\python.exe" (
+            for /d %%p in ("C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python3*") do set "PYTHON_PATH=%%~dp0python.exe"
+        )
+
+        if defined PYTHON_PATH (
+            echo [*] Found Python: %PYTHON_PATH%
+            for %%P in ("%PYTHON_PATH%") do set "PYTHON_DIR=%%~dpP"
+            set "PATH=%PATH%;%PYTHON_DIR%"
+            set "PYTHON_CMD=%PYTHON_PATH%"
+        ) else (
+            echo [WARNING] Python not found, auto-installing...
+
+            where winget >nul 2>&1
+            if not errorlevel 1 (
+                echo     Installing Python via Winget...
+                winget install Python.Python.3 --accept-package-agreements --accept-source-agreements --silent
+                if not errorlevel 1 goto :python_verify_install
+            )
+
+            where choco >nul 2>&1
+            if not errorlevel 1 (
+                echo     Installing Python via Chocolatey...
+                choco install python -y
+                if not errorlevel 1 goto :python_verify_install
+            )
+
+            where scoop >nul 2>&1
+            if not errorlevel 1 (
+                echo     Installing Python via Scoop...
+                scoop install python
+                if not errorlevel 1 goto :python_verify_install
+            )
+
+            echo     Querying latest Python version...
+            for /f "delims=" %%v in ('curl -s https://www.python.org/ftp/python/ ^| findstr /r "^3\.[0-9]*\.[0-9]*/$" ^| sort /r ^| findstr /n "^" ^| findstr "^[1]:"') do (
+                for /f "tokens=1 delims=/" %%a in ("%%v") do set "PYTHON_LATEST_VERSION=%%a"
+            )
+            if not defined PYTHON_LATEST_VERSION set "PYTHON_LATEST_VERSION=3.11.9"
+            echo     Latest Python version: %PYTHON_LATEST_VERSION%
+
+            echo     Downloading Python %PYTHON_LATEST_VERSION% installer...
+            if not exist "%TEMP%\python_installer.exe" (
+                curl -L -o "%TEMP%\python_installer.exe" https://www.python.org/ftp/python/%PYTHON_LATEST_VERSION%/python-%PYTHON_LATEST_VERSION%-amd64.exe
+            )
+
+            if exist "%TEMP%\python_installer.exe" (
+                echo     Silently installing Python to %CD%\_python...
+                "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=0 Include_pip=1 TargetDir="%CD%\_python"
+                if exist "%CD%\_python\python.exe" (
+                    set "PYTHON_CMD=%CD%\_python\python.exe"
+                    set "PATH=%CD%\_python;%PATH%"
+                    echo [*] Python installed to: %CD%\_python
+                    del "%TEMP%\python_installer.exe" 2>nul
+                ) else (
+                    echo [ERROR] Python installation failed
+                    exit /b 1
+                )
+            ) else (
+                echo [ERROR] Python download failed
+                exit /b 1
+            )
+        )
+    ) else (
+        set PYTHON_CMD=python
+    )
+) else (
     set PYTHON_CMD=py
-    goto :python_found
 )
 
-echo Error: Python environment not detected
-echo.
-echo Please install Python 3.10 or higher first:
-echo   Download: https://www.python.org/downloads/
-echo   Check "Add Python to PATH" during installation
-echo.
-pause
-goto main_menu
+:python_verify_install
+if not defined PYTHON_CMD (
+    where py >nul 2>&1 && set "PYTHON_CMD=py"
+    where python >nul 2>&1 && set "PYTHON_CMD=python"
+)
 
-:python_found
-for /f "tokens=2" %%i in ('%PYTHON_CMD% --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo OK: Python version %PYTHON_VERSION% (command: %PYTHON_CMD%)
 echo.
+echo Python version:
+%PYTHON_CMD% --version
 
-REM Check virtual environment
-echo [2/6] Checking virtual environment...
-if exist "venv\Scripts\activate.bat" (
-    echo OK: Virtual environment detected: venv
-    set VENV_EXISTS=1
-) else if exist ".venv\Scripts\activate.bat" (
-    echo OK: Virtual environment detected: .venv
-    set VENV_EXISTS=1
+echo [*] Checking virtual environment status...
+if defined VIRTUAL_ENV (
+    echo Already in virtual environment: %VIRTUAL_ENV%
+    set IN_VENV=1
 ) else (
-    echo Warning: No virtual environment detected
+    echo Not in virtual environment
+    set IN_VENV=0
+)
+exit /b 0
+
+:test_pip_mirrors
+echo [2/5] Testing PIP mirror sources...
+
+set "MIRRORS[0]=https://pypi.tuna.tsinghua.edu.cn/simple|Tsinghua"
+set "MIRRORS[1]=https://mirrors.aliyun.com/pypi/simple/|Aliyun"
+set "MIRRORS[2]=https://pypi.douban.com/simple/|Douban"
+set "MIRRORS[3]=https://pypi.mirrors.ustc.edu.cn/simple/|USTC"
+
+set "MIN_TIME=9999"
+set "BEST_MIRROR="
+set "BEST_NAME="
+
+for /L %%i in (0,1,3) do (
+    for /f "tokens=1,2 delims=|" %%a in ("!MIRRORS[%%i]!") do (
+        set "MIRROR_URL=%%a"
+        set "MIRROR_NAME=%%b"
+        echo     Testing !MIRROR_NAME!...
+
+        curl -s -o nul -w "%%{time_connect}" --connect-timeout 1.5 --max-time 2 "!MIRROR_URL!" > temp_pip_time.txt 2>&1
+        set /p TEST_TIME=<temp_pip_time.txt
+        del temp_pip_time.txt 2>nul
+
+        if not defined TEST_TIME set "TEST_TIME=9999"
+
+        if "!TEST_TIME!"=="0" (
+            echo         !MIRROR_NAME!: timeout/failed
+            set "TEST_TIME=9999"
+        ) else (
+            for /f "tokens=* delims=" %%t in ('%PYTHON_CMD% -c "print(int(float('!TEST_TIME!')*1000))"') do set "PIP_INT_TIME=%%t"
+            echo         !MIRROR_NAME!: !TEST_TIME!s (!PIP_INT_TIME!ms)
+            if !PIP_INT_TIME! LSS !MIN_TIME! (
+                set "MIN_TIME=!PIP_INT_TIME!"
+                set "BEST_MIRROR=!MIRROR_URL!"
+                set "BEST_NAME=!MIRROR_NAME!"
+            )
+        )
+    )
+)
+
+if "!BEST_MIRROR!"=="" (
+    echo [WARNING] All mirrors failed, using default PyPI
+    set "FASTEST_PIP_MIRROR=https://pypi.org/simple/"
+) else (
+    set "FASTEST_PIP_MIRROR=!BEST_MIRROR!"
+    echo.
+    echo [*] Fastest PIP mirror: !BEST_NAME! (!MIN_TIME!ms)
+)
+exit /b 0
+
+:detect_venv
+echo [3/5] Detecting Python virtual environment...
+
+if exist venv\Scripts\activate.bat (
+    echo Found virtual environment: venv
+    set VENV_EXISTS=1
+    set VENV_PATH=venv
+) else if exist .venv\Scripts\activate.bat (
+    echo Found virtual environment: .venv
+    set VENV_EXISTS=1
+    set VENV_PATH=.venv
+) else (
+    echo No virtual environment found
     set VENV_EXISTS=0
 )
-echo.
+exit /b 0
 
-REM Check dependencies
-echo [3/6] Checking dependencies...
-if exist "venv\Scripts\activate.bat" (
-    call venv\Scripts\activate.bat
-    %PYTHON_CMD% -c "import aiohttp" >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo OK: aiohttp dependency is installed
-    ) else (
-        echo Warning: aiohttp not installed
-    )
-    call deactivate
-) else if exist ".venv\Scripts\activate.bat" (
-    call .venv\Scripts\activate.bat
-    %PYTHON_CMD% -c "import aiohttp" >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo OK: aiohttp dependency is installed
-    ) else (
-        echo Warning: aiohttp not installed
-    )
-    call deactivate
-) else (
-    %PYTHON_CMD% -c "import aiohttp" >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo OK: aiohttp dependency is installed
-    ) else (
-        echo Warning: aiohttp not installed
-    )
-)
-echo.
+:setup_venv
+echo [4/5] Setting up Python virtual environment and installing dependencies...
 
-REM Check script files
-echo [4/6] Checking script files...
-if exist ".github\workflows\iptv.py" (
-    echo OK: iptv.py script file exists
-) else (
-    echo Error: iptv.py script file not found
-)
-
-if exist ".github\workflows\index.html" (
-    echo OK: index.html web file exists
-) else (
-    echo Error: index.html web file not found
-)
-echo.
-
-REM Check IPTV configuration directory
-echo [5/6] Checking IPTV configuration directory...
-if exist ".github\workflows\IPTV" (
-    echo OK: IPTV configuration directory exists
-    
-    if exist ".github\workflows\IPTV\CCTV.txt" (
-        echo OK: CCTV channel configuration file exists
-    ) else (
-        echo Warning: CCTV channel configuration file not found
-    )
-    
-    set /a province_count=0
-    for %%f in (.github\workflows\IPTV\*.txt) do (
-        set /a province_count+=1
-    )
-    echo OK: Provincial channel configuration files: !province_count!
-) else (
-    echo Error: IPTV configuration directory not found
-)
-echo.
-
-REM Check network connection
-echo [6/6] Checking network connection...
-ping -n 1 8.8.8.8 >nul 2>&1
-if %errorlevel% equ 0 (
-    echo OK: Network connection is normal
-) else (
-    echo Warning: Network connection test failed
-)
-echo.
-
-echo ============================================================
-echo   Environment Check Complete
-echo ============================================================
-echo.
-pause
-goto main_menu
-
-:venv_management
-cls
-echo.
-echo ============================================================
-echo   Virtual Environment Management
-echo ============================================================
-echo.
-
-if exist "venv\Scripts\activate.bat" (
-    echo OK: Virtual environment detected: venv
-) else if exist ".venv\Scripts\activate.bat" (
-    echo OK: Virtual environment detected: .venv
-) else (
-    echo Warning: No virtual environment detected
-)
-echo.
-
-echo Please select operation:
-echo   [1] Create virtual environment
-echo   [2] Activate virtual environment and install dependencies
-echo   [3] Delete virtual environment
-echo   [0] Return to main menu
-echo.
-set /p venv_choice="Please select operation (0-3): "
-
-if "%venv_choice%"=="1" goto create_venv
-if "%venv_choice%"=="2" goto activate_venv
-if "%venv_choice%"=="3" goto delete_venv
-if "%venv_choice%"=="0" goto main_menu
-
-echo.
-echo Invalid option
-pause
-goto main_menu
-
-:create_venv
-cls
-echo.
-echo ============================================================
-echo   Create Virtual Environment
-echo ============================================================
-echo.
-
-if exist "venv" (
-    echo Warning: venv directory already exists
-    set /p overwrite="Delete and recreate? (y/n): "
-    if /i not "%overwrite%"=="y" (
-        echo Creation cancelled
+if %VENV_EXISTS%==0 (
+    echo Creating virtual environment at %VENV_PATH%...
+    %PYTHON_CMD% -m venv %VENV_PATH%
+    if errorlevel 1 (
+        echo ERROR: Failed to create virtual environment
         pause
-        goto main_menu
+        exit /b 1
     )
-    rmdir /s /q venv
+    set VENV_EXISTS=1
 )
 
-echo Creating virtual environment...
-%PYTHON_CMD% -m venv venv
-
-if %errorlevel% neq 0 (
-    echo Error: Virtual environment creation failed
+if not exist %VENV_PATH% (
+    echo ERROR: Virtual environment path not found: %VENV_PATH%
     pause
-    goto main_menu
+    exit /b 1
 )
 
-echo OK: Virtual environment created successfully
-echo.
-echo Installing dependencies...
-call venv\Scripts\activate.bat
-%PYTHON_CMD% -m pip install --upgrade pip
-%PYTHON_CMD% -m pip install aiohttp
-call deactivate
+call %VENV_PATH%\Scripts\activate.bat
 
-echo OK: Dependencies installed successfully
-echo.
-pause
-goto main_menu
+if defined FASTEST_PIP_MIRROR (
+    echo [*] Configuring PIP mirror: %FASTEST_PIP_MIRROR%
 
-:activate_venv
-cls
-echo.
-echo ============================================================
-echo   Activate Virtual Environment and Install Dependencies
-echo ============================================================
-echo.
+    if not exist "%VENV_PATH%\pip_config" mkdir "%VENV_PATH%\pip_config"
 
-if exist "venv\Scripts\activate.bat" (
-    call venv\Scripts\activate.bat
-    echo OK: Virtual environment activated: venv
-) else if exist ".venv\Scripts\activate.bat" (
-    call .venv\Scripts\activate.bat
-    echo OK: Virtual environment activated: .venv
-) else (
-    echo Error: Virtual environment not found
-    echo Please create virtual environment first
-    pause
-    goto main_menu
+    set "TRUSTED_HOST=!FASTEST_PIP_MIRROR!"
+    set "TRUSTED_HOST=!TRUSTED_HOST:https://=!"
+    set "TRUSTED_HOST=!TRUSTED_HOST:http://=!"
+    for /f "delims=/" %%h in ("!TRUSTED_HOST!") do set "TRUSTED_HOST=%%h"
+
+    echo [global]> "%VENV_PATH%\pip_config\pip.ini"
+    echo index-url=%FASTEST_PIP_MIRROR%>> "%VENV_PATH%\pip_config\pip.ini"
+    echo trusted-host=%TRUSTED_HOST%>> "%VENV_PATH%\pip_config\pip.ini"
+    echo [install]>> "%VENV_PATH%\pip_config\pip.ini"
+    echo trusted-host=%TRUSTED_HOST%>> "%VENV_PATH%\pip_config\pip.ini"
+
+    set PIP_CONFIG_FILE=%VENV_PATH%\pip_config\pip.ini
 )
 
-echo.
-echo Checking and installing dependencies...
-%PYTHON_CMD% -m pip install --upgrade pip
-%PYTHON_CMD% -m pip install aiohttp
+echo Installing Python dependencies...
+%PYTHON_CMD% -m pip install --upgrade pip --disable-pip-version-check -i %FASTEST_PIP_MIRROR%
+%PYTHON_CMD% -m pip install aiohttp --disable-pip-version-check -i %FASTEST_PIP_MIRROR%
 
-echo OK: Dependencies installed successfully
-echo.
-echo Note: Virtual environment is activated in this session
-echo To use in a new command window, run:
-echo   venv\Scripts\activate.bat
-echo.
-pause
-call deactivate
-goto main_menu
+if errorlevel 1 (
+    echo WARNING: Mirror install failed, trying default source...
+    %PYTHON_CMD% -m pip install --upgrade pip --disable-pip-version-check
+    %PYTHON_CMD% -m pip install aiohttp --disable-pip-version-check
 
-:delete_venv
-cls
-echo.
-echo ============================================================
-echo   Delete Virtual Environment
-echo ============================================================
-echo.
-
-if exist "venv" (
-    echo Warning: About to delete venv directory
-    set /p confirm="Confirm deletion? (y/n): "
-    if /i "%confirm%"=="y" (
-        rmdir /s /q venv
-        echo OK: Virtual environment deleted
-    ) else (
-        echo Deletion cancelled
+    if errorlevel 1 (
+        echo ERROR: Dependency installation failed
+        pause
+        exit /b 1
     )
-) else if exist ".venv" (
-    echo Warning: About to delete .venv directory
-    set /p confirm="Confirm deletion? (y/n): "
-    if /i "%confirm%"=="y" (
-        rmdir /s /q .venv
-        echo OK: Virtual environment deleted
-    ) else (
-        echo Deletion cancelled
-    )
-) else (
-    echo Virtual environment not found
 )
 
-echo.
-pause
-goto main_menu
+echo Python virtual environment setup complete
+exit /b 0
 
 :run_collection
-cls
 echo.
-echo ============================================================
-echo   Run IPTV Collection
-echo ============================================================
-echo.
+echo ========================================
+echo Running IPTV Collection
+echo ========================================
 
-REM Detect Python environment
-set PYTHON_CMD=
-where python >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python
-    goto :python_found_run
+echo [5/5] Checking script files and config...
+
+if not exist ".github\workflows\iptv.py" (
+    echo ERROR: iptv.py script not found
+    pause
+    exit /b 1
 )
-where python3 >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python3
-    goto :python_found_run
-)
-where py >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=py
-    goto :python_found_run
-)
+echo [*] iptv.py script found
 
-echo Error: Python environment not detected
-pause
-goto main_menu
-
-:python_found_run
-
-REM Detect virtual environment
-if exist "venv\Scripts\activate.bat" (
-    echo Using virtual environment: venv
-    call venv\Scripts\activate.bat
-    set USING_VENV=1
-) else if exist ".venv\Scripts\activate.bat" (
-    echo Using virtual environment: .venv
-    call .venv\Scripts\activate.bat
-    set USING_VENV=1
+if exist ".github\workflows\IPTV" (
+    echo [*] IPTV config directory found
 ) else (
-    echo Warning: No virtual environment detected, using system Python
-    echo Suggestion: Create virtual environment to isolate dependencies
-    set USING_VENV=0
+    echo WARNING: IPTV config directory not found
 )
 
 echo.
-echo Starting IPTV live stream collection...
+echo Starting IPTV stream collection...
 echo ========================================
 echo.
 
+call %VENV_PATH%\Scripts\activate.bat
 %PYTHON_CMD% .github\workflows\iptv.py
 
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo.
-    echo Error: Script execution failed
-    if %USING_VENV% equ 1 (
-        call deactivate
-    )
+    echo ERROR: Script execution failed
     pause
-    goto main_menu
-)
-
-if %USING_VENV% equ 1 (
-    call deactivate
+    exit /b 1
 )
 
 echo.
 echo ========================================
-echo OK: IPTV live stream collection complete!
+echo IPTV Collection Complete!
 echo ========================================
 echo.
 
-REM Check generated files
 if exist "best_sorted.m3u" (
     echo Generated M3U file: best_sorted.m3u
     for %%F in (best_sorted.m3u) do echo    File size: %%~zF bytes
@@ -417,311 +315,71 @@ if exist "best_sorted.m3u8" (
 echo.
 echo Tips:
 echo    - Use M3U-compatible players to open generated files
-echo    - Recommended players: PotPlayer, VLC, Kodi, etc.
-echo    - Run this script regularly to get latest live streams
+echo    - Recommended: PotPlayer, VLC, Kodi, etc.
+echo    - Run with --collect to run IPTV collection only
 echo.
 pause
-goto main_menu
+exit /b 0
 
-:start_web_server
-cls
+:setup_scheduled_task_and_web
 echo.
-echo ============================================================
-echo   Start Local Web Server
-echo ============================================================
+echo ========================================
+echo Setting Up Scheduled Task
+echo ========================================
+
+echo [5/5] Registering scheduled task...
+
+set "TASK_NAME=IPTV_Collection"
+set "SCRIPT_PATH=%~f0"
+set "WORK_DIR=%CD%"
+
+schtasks /query /tn "%TASK_NAME%" >nul 2>&1
+if not errorlevel 1 (
+    echo [*] Scheduled task already exists: %TASK_NAME%
+    schtasks /query /tn "%TASK_NAME%" /fo list | findstr /i "Status Schedule Task"
+) else (
+    echo Creating scheduled task: %TASK_NAME%
+    echo    Trigger: Every 4 hours
+    echo    Command: %SCRIPT_PATH% --collect
+    echo    Work dir: %WORK_DIR%
+    echo.
+
+    schtasks /create /tn "%TASK_NAME%" /tr "\"%SCRIPT_PATH%\" --collect" /sc hourly /mo 4 /f
+
+    if errorlevel 1 (
+        echo [WARNING] Failed to create scheduled task via schtasks
+        echo    You can manually create it in Task Scheduler (taskschd.msc)
+    ) else (
+        echo [*] Scheduled task created successfully!
+    )
+)
+
 echo.
+echo ========================================
+echo Starting Local Web Server
+echo ========================================
 
 if not exist ".github\workflows\index.html" (
-    echo Error: index.html file not found
+    echo ERROR: index.html not found
     pause
-    goto main_menu
+    exit /b 1
 )
 
 echo Starting local web server...
 echo.
-echo Service address: http://localhost:8000
-echo Service directory: %CD%
+echo Server URL: http://localhost:8000
 echo.
 echo Tips:
-echo    - Press Ctrl+C to stop service
-echo    - Closing this window will also stop service
+echo    - Press Ctrl+C to stop the server
+echo    - Closing this window will also stop the server
+echo    - Scheduled task will auto-collect every 4 hours
 echo.
 echo ========================================
 echo.
 
-REM Detect Python environment
-set PYTHON_CMD=
-where python >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python
-    goto :python_found_web
-)
-where python3 >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=python3
-    goto :python_found_web
-)
-where py >nul 2>&1
-if %errorlevel% equ 0 (
-    set PYTHON_CMD=py
-    goto :python_found_web
-)
-
-echo Error: Python environment not detected
-pause
-goto main_menu
-
-:python_found_web
-
+call %VENV_PATH%\Scripts\activate.bat
 cd .github\workflows
 %PYTHON_CMD% -m http.server 8000
 cd ..\..
-
 pause
-goto main_menu
-
-:setup_scheduled_task
-cls
-echo.
-echo ============================================================
-echo   Setup Scheduled Task
-echo ============================================================
-echo.
-
-echo Creating scheduled task script...
-echo.
-
-REM Create scheduled task script
-(
-echo @echo off
-echo chcp 65001 ^>nul
-echo title IPTV Scheduled Collection Task
-echo.
-echo cd /d "%CD%"
-echo.
-echo echo [%%date%% %%time%%] Starting IPTV scheduled collection
-echo.
-echo REM Detect Python environment
-echo set PYTHON_CMD=
-echo where python ^>nul 2^>^&1
-echo if %%errorlevel%% equ 0 ^(
-echo     set PYTHON_CMD=python
-echo ^) else ^(
-echo     where python3 ^>nul 2^>^&1
-echo     if %%errorlevel%% equ 0 ^(
-echo         set PYTHON_CMD=python3
-echo     ^) else ^(
-echo         where py ^>nul 2^>^&1
-echo         if %%errorlevel%% equ 0 ^(
-echo             set PYTHON_CMD=py
-echo         ^)
-echo     ^)
-echo ^)
-echo.
-echo REM Activate virtual environment
-echo if exist "venv\Scripts\activate.bat" ^(
-echo     call venv\Scripts\activate.bat
-echo ^) else if exist ".venv\Scripts\activate.bat" ^(
-echo     call .venv\Scripts\activate.bat
-echo ^)
-echo.
-echo REM Run collection script
-echo %%PYTHON_CMD%% .github\workflows\iptv.py
-echo.
-echo echo [%%date%% %%time%%] IPTV scheduled collection complete
-echo.
-) > iptv_scheduled_task.bat
-
-echo OK: Scheduled task script created: iptv_scheduled_task.bat
-echo.
-echo Configure Windows Task Scheduler:
-echo    1. Open "Task Scheduler" (Win+R, type taskschd.msc)
-echo    2. Click "Create Basic Task"
-echo    3. Set task name: IPTV Scheduled Collection
-echo    4. Set trigger (e.g., every 4 hours)
-echo    5. Action: Start program
-echo    6. Program or script: %CD%\iptv_scheduled_task.bat
-echo    7. Start in: %CD%
-echo.
-echo Or test directly:
-echo    iptv_scheduled_task.bat
-echo.
-pause
-goto main_menu
-
-:view_files
-cls
-echo.
-echo ============================================================
-echo   View Generated Files
-echo ============================================================
-echo.
-
-echo Generated playlist files:
-echo.
-
-if exist "best_sorted.m3u" (
-    echo [1] best_sorted.m3u (M3U format)
-    for %%F in (best_sorted.m3u) do echo    Size: %%~zF bytes, Modified: %%~tF
-    echo.
-)
-
-if exist "best_sorted.m3u8" (
-    echo [2] best_sorted.m3u8 (M3U8 format)
-    for %%F in (best_sorted.m3u8) do echo    Size: %%~zF bytes, Modified: %%~tF
-    echo.
-)
-
-if not exist "best_sorted.m3u" if not exist "best_sorted.m3u8" (
-    echo No generated files found
-    echo.
-)
-
-echo Please select operation:
-echo   [1] Open M3U file
-echo   [2] Open M3U8 file
-echo   [3] Open file directory
-echo   [0] Return to main menu
-echo.
-set /p view_choice="Please select operation (0-3): "
-
-if "%view_choice%"=="1" (
-    if exist "best_sorted.m3u" notepad best_sorted.m3u
-)
-if "%view_choice%"=="2" (
-    if exist "best_sorted.m3u8" notepad best_sorted.m3u8
-)
-if "%view_choice%"=="3" (
-    explorer .
-)
-if "%view_choice%"=="0" goto main_menu
-
-pause
-goto main_menu
-
-:cleanup
-cls
-echo.
-echo ============================================================
-echo   Clean Temporary Files
-echo ============================================================
-echo.
-
-echo Warning: This operation will delete the following files:
-echo   - Python cache files (__pycache__)
-echo   - Temporary files (*.pyc)
-echo   - Virtual environment (venv/.venv)
-echo   - Generated playlists (best_sorted.m3u/m3u8)
-echo.
-set /p confirm="Confirm cleanup? (y/n): "
-
-if /i not "%confirm%"=="y" (
-    echo Cleanup cancelled
-    pause
-    goto main_menu
-)
-
-echo.
-echo Cleaning up...
-
-REM Clean Python cache
-if exist "__pycache__" (
-    rmdir /s /q __pycache__
-    echo OK: Cleaned __pycache__
-)
-
-REM Clean .pyc files
-del /s /q *.pyc >nul 2>&1
-if %errorlevel% equ 0 (
-    echo OK: Cleaned *.pyc files
-)
-
-REM Clean virtual environment
-if exist "venv" (
-    rmdir /s /q venv
-    echo OK: Cleaned venv virtual environment
-)
-
-if exist ".venv" (
-    rmdir /s /q .venv
-    echo OK: Cleaned .venv virtual environment
-)
-
-REM Clean generated files
-if exist "best_sorted.m3u" (
-    del best_sorted.m3u
-    echo OK: Cleaned best_sorted.m3u
-)
-
-if exist "best_sorted.m3u8" (
-    del best_sorted.m3u8
-    echo OK: Cleaned best_sorted.m3u8
-)
-
-echo.
-echo OK: Cleanup complete!
-echo.
-pause
-goto main_menu
-
-:show_help
-cls
-echo.
-echo ============================================================
-echo   Help Documentation
-echo ============================================================
-echo.
-
-echo Function Description:
-echo.
-echo   [1] Environment Check and Configuration
-echo      - Check Python environment
-echo      - Check virtual environment
-echo      - Check dependencies
-echo      - Check script files
-echo      - Check network connection
-echo.
-echo   [2] Virtual Environment Management
-echo      - Create virtual environment
-echo      - Activate virtual environment and install dependencies
-echo      - Delete virtual environment
-echo.
-echo   [3] Run IPTV Collection
-echo      - Automatically detect and use virtual environment
-echo      - Collect IPTV live streams
-echo      - Smart classification and quality filtering
-echo      - Generate M3U playlist
-echo.
-echo   [4] Start Local Web Server
-echo      - Provide web interface
-echo      - Support search and filtering
-echo      - Real-time channel information viewing
-echo.
-echo   [5] Setup Scheduled Task
-echo      - Create scheduled task script
-echo      - Configure Windows Task Scheduler
-echo      - Implement automatic updates
-echo.
-echo   [6] View Generated Files
-echo      - View M3U/M3U8 files
-echo      - Open file directory
-echo.
-echo   [7] Clean Temporary Files
-echo      - Clean Python cache
-echo      - Clean virtual environment
-echo      - Clean generated files
-echo.
-echo For more information:
-echo    - View README.md for more details
-echo    - Visit project GitHub page for latest updates
-echo.
-pause
-goto main_menu
-
-:exit_program
-cls
-echo.
-echo Thank you for using IPTV Live Stream Collection Tool!
-echo.
-timeout /t 2 >nul
 exit /b 0

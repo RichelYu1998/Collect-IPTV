@@ -1,730 +1,387 @@
 #!/bin/bash
 
 # ========================================
-# IPTV直播源自动采集工具 - Linux/macOS完整版
-# 功能：环境检测、虚拟环境、数据采集、网页服务
+# IPTV Live Stream Collection Tool - Linux/macOS
+# Auto: env detect -> mirror test -> venv -> scheduled task -> web server
 # ========================================
 
-set -e
+VERSION=$(python3 -c "import re; m=re.search(r'###\s+v(\d+\.\d+\.\d+)', open('README.md', encoding='utf-8').read()); print(m.group(1) if m else '0.0.0')" 2>/dev/null || python -c "import re; m=re.search(r'###\s+v(\d+\.\d+\.\d+)', open('README.md', encoding='utf-8').read()); print(m.group(1) if m else '0.0.0')" 2>/dev/null || echo "0.0.0")
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+echo "========================================"
+echo "IPTV Live Stream Collection Tool - v${VERSION}"
+echo "========================================"
 
-# 工作目录
-WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$WORK_DIR"
+VENV_PATH=".venv"
+FASTEST_PIP_MIRROR=""
 
-# 日志函数
-log_info() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warn() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-log_section() {
+detect_python_env() {
     echo ""
-    echo "═══════════════════════════════════════════════════════════"
-    echo "  $1"
-    echo "═══════════════════════════════════════════════════════════"
-    echo ""
-}
+    echo "========================================"
+    echo "Environment Detection and Configuration"
+    echo "========================================"
 
-# 检测Python环境
-detect_python() {
-    log_section "🔍 环境检测与配置"
-    
-    echo "[1/6] 检测Python环境..."
-    PYTHON_CMD=""
-    
+    echo "[1/5] Detecting Python environment..."
+
     if command -v python3 &> /dev/null; then
         PYTHON_CMD="python3"
-        log_info "Python版本：$(python3 --version 2>&1 | awk '{print $2}') (命令: python3)"
+        echo "Python: $(python3 --version 2>&1)"
     elif command -v python &> /dev/null; then
         PYTHON_CMD="python"
-        log_info "Python版本：$(python --version 2>&1 | awk '{print $2}') (命令: python)"
+        echo "Python: $(python --version 2>&1)"
     else
-        log_error "Python环境检测失败"
-        echo ""
-        echo "请先安装Python 3.10或更高版本："
-        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            echo "  Ubuntu/Debian: sudo apt-get install python3 python3-pip"
-            echo "  CentOS/RHEL: sudo yum install python3 python3-pip"
-            echo "  Arch Linux: sudo pacman -S python python-pip"
-        elif [[ "$OSTYPE" == "darwin"* ]]; then
-            echo "  macOS: brew install python3"
+        echo "Python not in PATH, searching system..."
+
+        COMMON_PYTHON_PATHS=(
+            "/usr/bin/python3"
+            "/usr/local/bin/python3"
+            "/opt/homebrew/bin/python3"
+            "$HOME/.pyenv/shims/python3"
+            "/usr/bin/python"
+            "/usr/local/bin/python"
+        )
+
+        for py_path in "${COMMON_PYTHON_PATHS[@]}"; do
+            if [ -x "$py_path" ]; then
+                echo "[*] Found Python: $py_path"
+                export PATH="$(dirname $py_path):$PATH"
+                PYTHON_CMD="$py_path"
+                break
+            fi
+        done
+
+        if [ -z "$PYTHON_CMD" ]; then
+            echo "[WARNING] Python not found, auto-installing..."
+
+            case "$(uname -s)" in
+                Darwin)
+                    if command -v brew &> /dev/null; then
+                        echo "    Installing Python via Homebrew..."
+                        brew install python
+                    elif [ -f "/opt/homebrew/bin/brew" ]; then
+                        echo "    Installing Python via Homebrew (Apple Silicon)..."
+                        /opt/homebrew/bin/brew install python
+                    else
+                        echo "[ERROR] Homebrew not found, cannot auto-install Python"
+                        echo "Install Homebrew first: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                        return 1
+                    fi
+                    ;;
+                Linux)
+                    if command -v apt-get &> /dev/null; then
+                        echo "    Installing Python via apt..."
+                        sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip
+                    elif command -v yum &> /dev/null; then
+                        echo "    Installing Python via yum..."
+                        sudo yum install -y python3 python3-pip
+                    elif command -v dnf &> /dev/null; then
+                        echo "    Installing Python via dnf..."
+                        sudo dnf install -y python3 python3-pip
+                    elif command -v pacman &> /dev/null; then
+                        echo "    Installing Python via pacman..."
+                        sudo pacman -Syu --noconfirm python python-pip
+                    else
+                        echo "[ERROR] Package manager not recognized, please install Python manually"
+                        return 1
+                    fi
+                    ;;
+                *)
+                    echo "[ERROR] Unsupported OS"
+                    return 1
+                    ;;
+            esac
+
+            if command -v python3 &> /dev/null; then
+                PYTHON_CMD="python3"
+                echo "[*] Python installed: $(python3 --version 2>&1)"
+            elif command -v python &> /dev/null; then
+                PYTHON_CMD="python"
+                echo "[*] Python installed: $(python --version 2>&1)"
+            else
+                echo "[ERROR] Python installation failed"
+                return 1
+            fi
         fi
-        return 1
     fi
-    
+
+    echo ""
+    echo "[*] Checking virtual environment status..."
+    if [ -n "$VIRTUAL_ENV" ]; then
+        echo "Already in virtual environment: $VIRTUAL_ENV"
+        IN_VENV=1
+    else
+        echo "Not in virtual environment"
+        IN_VENV=0
+    fi
+
     return 0
 }
 
-# 检测虚拟环境
+test_pip_mirrors() {
+    echo "[2/5] Testing PIP mirror sources..."
+
+    declare -a MIRRORS=(
+        "https://pypi.tuna.tsinghua.edu.cn/simple|Tsinghua"
+        "https://mirrors.aliyun.com/pypi/simple/|Aliyun"
+        "https://pypi.douban.com/simple/|Douban"
+        "https://pypi.mirrors.ustc.edu.cn/simple/|USTC"
+    )
+
+    MIN_TIME=9999
+    BEST_MIRROR=""
+    BEST_NAME=""
+
+    for mirror_entry in "${MIRRORS[@]}"; do
+        IFS='|' read -r MIRROR_URL MIRROR_NAME <<< "$mirror_entry"
+        echo "    Testing $MIRROR_NAME..."
+
+        TEST_TIME=$(curl -s -o /dev/null -w "%{time_connect}" --connect-timeout 1.5 --max-time 2 "$MIRROR_URL" 2>/dev/null)
+
+        if [ -z "$TEST_TIME" ] || [ "$TEST_TIME" = "0.000" ]; then
+            echo "        $MIRROR_NAME: timeout/failed"
+        else
+            INT_TIME=${TEST_TIME%%.*}
+            INT_TIME=${INT_TIME#0}
+            [ -z "$INT_TIME" ] && INT_TIME=0
+            echo "        $MIRROR_NAME: ${TEST_TIME}s (${INT_TIME}ms)"
+            if [ "$INT_TIME" -lt "$MIN_TIME" ]; then
+                MIN_TIME=$INT_TIME
+                BEST_MIRROR="$MIRROR_URL"
+                BEST_NAME="$MIRROR_NAME"
+            fi
+        fi
+    done
+
+    if [ -n "$BEST_MIRROR" ]; then
+        FASTEST_PIP_MIRROR="$BEST_MIRROR"
+        echo "[*] Fastest PIP mirror: $BEST_NAME (${MIN_TIME}ms)"
+    else
+        echo "[WARNING] All mirrors failed, using default PyPI"
+        FASTEST_PIP_MIRROR="https://pypi.org/simple/"
+    fi
+}
+
 detect_venv() {
-    echo "[2/6] 检测虚拟环境..."
-    
+    echo "[3/5] Detecting Python virtual environment..."
+
     if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
-        log_info "检测到虚拟环境：venv"
+        echo "Found virtual environment: venv"
         VENV_EXISTS=1
         VENV_PATH="venv"
     elif [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-        log_info "检测到虚拟环境：.venv"
+        echo "Found virtual environment: .venv"
         VENV_EXISTS=1
         VENV_PATH=".venv"
     else
-        log_warn "未检测到虚拟环境"
+        echo "No virtual environment found"
         VENV_EXISTS=0
-        VENV_PATH=""
     fi
-    
-    return 0
 }
 
-# 检测依赖包
-check_dependencies() {
-    echo "[3/6] 检测依赖包..."
-    
-    if [ -n "$VENV_PATH" ]; then
-        source "$VENV_PATH/bin/activate"
-        if $PYTHON_CMD -c "import aiohttp" &> /dev/null; then
-            log_info "aiohttp依赖正常"
-        else
-            log_warn "aiohttp未安装"
+setup_venv() {
+    echo "[4/5] Setting up Python virtual environment and installing dependencies..."
+
+    if [ "$VENV_EXISTS" -eq 0 ]; then
+        echo "Creating virtual environment at $VENV_PATH..."
+        $PYTHON_CMD -m venv $VENV_PATH
+
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to create virtual environment"
+            exit 1
         fi
-        deactivate
-    else
-        if $PYTHON_CMD -c "import aiohttp" &> /dev/null; then
-            log_info "aiohttp依赖正常"
-        else
-            log_warn "aiohttp未安装"
+        VENV_EXISTS=1
+    fi
+
+    source "$VENV_PATH/bin/activate"
+
+    if [ -n "$FASTEST_PIP_MIRROR" ]; then
+        echo "[*] Configuring PIP mirror: $FASTEST_PIP_MIRROR"
+
+        mkdir -p "$VENV_PATH/pip_config"
+
+        TRUSTED_HOST=$(echo "$FASTEST_PIP_MIRROR" | sed -E 's|^https?://([^/]+).*|\1|')
+
+        cat > "$VENV_PATH/pip_config/pip.conf" << EOF
+[global]
+index-url = $FASTEST_PIP_MIRROR
+trusted-host = $TRUSTED_HOST
+[install]
+trusted-host = $TRUSTED_HOST
+EOF
+
+        export PIP_CONFIG_FILE="$VENV_PATH/pip_config/pip.conf"
+    fi
+
+    echo "Installing Python dependencies..."
+
+    if [ -n "$FASTEST_PIP_MIRROR" ]; then
+        pip install --upgrade pip -i "$FASTEST_PIP_MIRROR" --disable-pip-version-check
+        pip install aiohttp -i "$FASTEST_PIP_MIRROR" --disable-pip-version-check
+
+        if [ $? -ne 0 ]; then
+            echo "WARNING: Mirror install failed, trying default source..."
+            pip install --upgrade pip --disable-pip-version-check
+            pip install aiohttp --disable-pip-version-check
         fi
-    fi
-    
-    return 0
-}
-
-# 检测脚本文件
-check_scripts() {
-    echo "[4/6] 检测脚本文件..."
-    
-    if [ -f ".github/workflows/iptv.py" ]; then
-        log_info "iptv.py脚本文件存在"
     else
-        log_error "iptv.py脚本文件不存在"
+        pip install --upgrade pip --disable-pip-version-check
+        pip install aiohttp --disable-pip-version-check
     fi
-    
-    if [ -f ".github/workflows/index.html" ]; then
-        log_info "index.html网页文件存在"
-    else
-        log_error "index.html网页文件不存在"
-    fi
-    
-    return 0
-}
 
-# 检测IPTV配置目录
-check_iptv_config() {
-    echo "[5/6] 检测IPTV配置目录..."
-    
-    if [ -d ".github/workflows/IPTV" ]; then
-        log_info "IPTV配置目录存在"
-        
-        if [ -f ".github/workflows/IPTV/CCTV.txt" ]; then
-            log_info "CCTV频道配置文件存在"
-        else
-            log_warn "CCTV频道配置文件不存在"
-        fi
-        
-        province_count=$(find .github/workflows/IPTV -name "*.txt" | wc -l)
-        log_info "省市频道配置文件数量：$province_count 个"
-    else
-        log_error "IPTV配置目录不存在"
-    fi
-    
-    return 0
-}
-
-# 检测网络连接
-check_network() {
-    echo "[6/6] 检测网络连接..."
-    
-    if ping -c 1 8.8.8.8 &> /dev/null; then
-        log_info "网络连接正常"
-    else
-        log_warn "网络连接测试失败"
-    fi
-    
-    return 0
-}
-
-# 完整环境检测
-check_environment() {
-    detect_python || return 1
-    detect_venv
-    check_dependencies
-    check_scripts
-    check_iptv_config
-    check_network
-    
-    log_section "环境检测完成"
-    return 0
-}
-
-# 创建虚拟环境
-create_venv() {
-    log_section "创建虚拟环境"
-    
-    if [ -d "venv" ]; then
-        log_warn "venv目录已存在"
-        read -p "是否删除并重新创建？ (y/n): " overwrite
-        if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
-            echo "已取消创建"
-            return 0
-        fi
-        rm -rf venv
-    fi
-    
-    echo "正在创建虚拟环境..."
-    $PYTHON_CMD -m venv venv
-    
     if [ $? -ne 0 ]; then
-        log_error "虚拟环境创建失败"
-        return 1
+        echo "ERROR: Dependency installation failed"
+        exit 1
     fi
-    
-    log_info "虚拟环境创建成功"
-    
-    echo "正在安装依赖包..."
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install aiohttp
-    deactivate
-    
-    log_info "依赖包安装完成"
-    return 0
+
+    echo "Python virtual environment setup complete"
 }
 
-# 激活虚拟环境并安装依赖
-activate_venv() {
-    log_section "激活虚拟环境并安装依赖"
-    
-    if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
-        source venv/bin/activate
-        log_info "虚拟环境已激活：venv"
-    elif [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-        source .venv/bin/activate
-        log_info "虚拟环境已激活：.venv"
-    else
-        log_error "未找到虚拟环境"
-        echo "请先创建虚拟环境"
-        return 1
-    fi
-    
-    echo ""
-    echo "正在检查并安装依赖..."
-    pip install --upgrade pip
-    pip install aiohttp
-    
-    log_info "依赖包安装完成"
-    echo ""
-    echo "提示：虚拟环境已在此会话中激活"
-    echo "如需在新的终端窗口中使用，请运行："
-    echo "  source venv/bin/activate"
-    echo ""
-    
-    deactivate
-    return 0
-}
-
-# 删除虚拟环境
-delete_venv() {
-    log_section "删除虚拟环境"
-    
-    if [ -d "venv" ]; then
-        log_warn "即将删除venv目录"
-        read -p "确认删除？ (y/n): " confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            rm -rf venv
-            log_info "虚拟环境已删除"
-        else
-            echo "已取消删除"
-        fi
-    elif [ -d ".venv" ]; then
-        log_warn "即将删除.venv目录"
-        read -p "确认删除？ (y/n): " confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            rm -rf .venv
-            log_info "虚拟环境已删除"
-        else
-            echo "已取消删除"
-        fi
-    else
-        echo "未找到虚拟环境"
-    fi
-    
-    return 0
-}
-
-# 虚拟环境管理菜单
-venv_management() {
-    while true; do
-        clear
-        echo ""
-        echo "═══════════════════════════════════════════════════════════"
-        echo "  🐍 虚拟环境管理"
-        echo "═══════════════════════════════════════════════════════════"
-        echo ""
-        
-        if [ -d "venv" ] || [ -d ".venv" ]; then
-            log_info "检测到虚拟环境"
-        else
-            log_warn "未检测到虚拟环境"
-        fi
-        echo ""
-        
-        echo "请选择操作："
-        echo "  [1] 创建虚拟环境"
-        echo "  [2] 激活虚拟环境并安装依赖"
-        echo "  [3] 删除虚拟环境"
-        echo "  [0] 返回主菜单"
-        echo ""
-        read -p "请选择操作 (0-3): " venv_choice
-        
-        case $venv_choice in
-            1)
-                create_venv
-                ;;
-            2)
-                activate_venv
-                ;;
-            3)
-                delete_venv
-                ;;
-            0)
-                return 0
-                ;;
-            *)
-                echo ""
-                log_error "无效选项"
-                ;;
-        esac
-        
-        echo ""
-        read -p "按Enter键继续..."
-    done
-}
-
-# 运行IPTV采集
 run_collection() {
-    log_section "运行IPTV采集"
-    
-    # 检测Python环境
-    if ! detect_python; then
-        return 1
-    fi
-    
-    # 检测虚拟环境
-    detect_venv
-    
-    # 激活虚拟环境（如果存在）
-    if [ -n "$VENV_PATH" ]; then
-        echo "使用虚拟环境：$VENV_PATH"
-        source "$VENV_PATH/bin/activate"
-        USING_VENV=1
-    else
-        log_warn "未检测到虚拟环境，使用系统Python"
-        echo "💡 建议创建虚拟环境以隔离依赖"
-        USING_VENV=0
-    fi
-    
     echo ""
-    echo "开始采集IPTV直播源..."
+    echo "========================================"
+    echo "Running IPTV Collection"
+    echo "========================================"
+
+    echo "[5/5] Checking script files and config..."
+
+    if [ ! -f ".github/workflows/iptv.py" ]; then
+        echo "ERROR: iptv.py script not found"
+        exit 1
+    fi
+    echo "[*] iptv.py script found"
+
+    if [ -d ".github/workflows/IPTV" ]; then
+        echo "[*] IPTV config directory found"
+    else
+        echo "WARNING: IPTV config directory not found"
+    fi
+
+    echo ""
+    echo "Starting IPTV stream collection..."
     echo "========================================"
     echo ""
-    
+
+    source "$VENV_PATH/bin/activate"
     $PYTHON_CMD .github/workflows/iptv.py
-    
+
     if [ $? -ne 0 ]; then
         echo ""
-        log_error "脚本执行失败"
-        if [ $USING_VENV -eq 1 ]; then
-            deactivate
-        fi
-        return 1
+        echo "ERROR: Script execution failed"
+        exit 1
     fi
-    
-    if [ $USING_VENV -eq 1 ]; then
-        deactivate
-    fi
-    
+
     echo ""
     echo "========================================"
-    log_info "IPTV直播源采集完成！"
+    echo "IPTV Collection Complete!"
     echo "========================================"
     echo ""
-    
-    # 检查生成的文件
+
     if [ -f "best_sorted.m3u" ]; then
-        echo "📄 生成的M3U文件：best_sorted.m3u"
-        echo "   文件大小：$(wc -c < best_sorted.m3u) 字节"
+        echo "Generated M3U file: best_sorted.m3u"
+        echo "   File size: $(wc -c < best_sorted.m3u) bytes"
     fi
-    
+
     if [ -f "best_sorted.m3u8" ]; then
-        echo "📄 生成的M3U8文件：best_sorted.m3u8"
-        echo "   文件大小：$(wc -c < best_sorted.m3u8) 字节"
+        echo "Generated M3U8 file: best_sorted.m3u8"
+        echo "   File size: $(wc -c < best_sorted.m3u8) bytes"
     fi
-    
+
     echo ""
-    echo "💡 提示："
-    echo "   - 可以使用支持M3U格式的播放器打开生成的文件"
-    echo "   - 推荐播放器：VLC、mpv、Kodi、IINA等"
-    echo "   - 定期运行此脚本以获取最新的直播源"
+    echo "Tips:"
+    echo "   - Use M3U-compatible players to open generated files"
+    echo "   - Recommended: VLC, mpv, Kodi, IINA, etc."
+    echo "   - Run with --collect to run IPTV collection only"
     echo ""
-    
-    return 0
 }
 
-# 启动本地网页服务
-start_web_server() {
-    log_section "启动本地网页服务"
-    
-    if [ ! -f ".github/workflows/index.html" ]; then
-        log_error "未找到index.html文件"
-        return 1
+setup_scheduled_task_and_web() {
+    echo ""
+    echo "========================================"
+    echo "Setting Up Scheduled Task"
+    echo "========================================"
+
+    echo "[5/5] Registering scheduled task..."
+
+    WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+    SCRIPT_PATH="$WORK_DIR/$(basename "$0")"
+    CRON_CMD="0 */4 * * * cd $WORK_DIR && $SCRIPT_PATH --collect >> $WORK_DIR/iptv_cron.log 2>&1"
+
+    EXISTING_CRON=$(crontab -l 2>/dev/null | grep -F "iptv_tool.sh --collect")
+
+    if [ -n "$EXISTING_CRON" ]; then
+        echo "[*] Scheduled task already exists in crontab:"
+        echo "    $EXISTING_CRON"
+    else
+        echo "Adding crontab entry: every 4 hours"
+        echo "    $CRON_CMD"
+        echo ""
+
+        (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+
+        if [ $? -eq 0 ]; then
+            echo "[*] Scheduled task created successfully!"
+        else
+            echo "[WARNING] Failed to add crontab entry"
+            echo "    You can manually add: crontab -e"
+            echo "    Add this line:"
+            echo "    $CRON_CMD"
+        fi
     fi
-    
-    echo "正在启动本地网页服务..."
+
     echo ""
-    echo "📡 服务地址：http://localhost:8000"
-    echo "📁 服务目录：$WORK_DIR"
+    echo "========================================"
+    echo "Starting Local Web Server"
+    echo "========================================"
+
+    if [ ! -f ".github/workflows/index.html" ]; then
+        echo "ERROR: index.html not found"
+        exit 1
+    fi
+
+    echo "Starting local web server..."
     echo ""
-    echo "💡 提示："
-    echo "   - 按 Ctrl+C 停止服务"
-    echo "   - 关闭此终端也会停止服务"
+    echo "Server URL: http://localhost:8000"
+    echo ""
+    echo "Tips:"
+    echo "   - Press Ctrl+C to stop the server"
+    echo "   - Closing this terminal will also stop the server"
+    echo "   - Scheduled task will auto-collect every 4 hours"
     echo ""
     echo "========================================"
     echo ""
-    
-    # 检测Python环境
-    if ! detect_python; then
-        return 1
-    fi
-    
+
+    source "$VENV_PATH/bin/activate"
     cd .github/workflows
     $PYTHON_CMD -m http.server 8000
     cd "$WORK_DIR"
-    
-    return 0
 }
 
-# 配置定时任务
-setup_scheduled_task() {
-    log_section "配置定时任务"
-    
-    echo "正在创建定时任务脚本..."
+cleanup_exit() {
     echo ""
-    
-    # 创建定时任务脚本
-    cat > iptv_scheduled_task.sh << 'EOF'
-#!/bin/bash
-
-# IPTV定时采集任务
-
-LOG_FILE="iptv_scheduled.log"
-
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo "Cleaning up processes..."
+    pkill -f "http.server 8000" >/dev/null 2>&1
+    echo "Done"
+    exit 0
 }
 
-log "开始IPTV定时采集"
+main() {
+    WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+    cd "$WORK_DIR"
 
-# 设置工作目录
-cd "$(dirname "$0")" || exit 1
+    detect_python_env || exit 1
+    test_pip_mirrors
+    detect_venv
+    setup_venv
 
-# 检测Python环境
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    log "错误：未检测到Python环境"
-    exit 1
-fi
-
-# 激活虚拟环境
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-elif [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-fi
-
-# 运行采集脚本
-$PYTHON_CMD .github/workflows/iptv.py
-
-log "IPTV定时采集完成"
-EOF
-    
-    chmod +x iptv_scheduled_task.sh
-    
-    log_info "定时任务脚本已创建：iptv_scheduled_task.sh"
-    echo ""
-    echo "💡 配置crontab定时任务（每4小时运行一次）："
-    echo "   crontab -e"
-    echo ""
-    echo "   添加以下行："
-    echo "   0 */4 * * * $WORK_DIR/iptv_scheduled_task.sh >> $WORK_DIR/iptv_cron.log 2>&1"
-    echo ""
-    echo "💡 或者直接运行测试："
-    echo "   ./iptv_scheduled_task.sh"
-    echo ""
-    
-    return 0
-}
-
-# 查看生成的文件
-view_files() {
-    log_section "查看生成的文件"
-    
-    echo "生成的播放列表文件："
-    echo ""
-    
-    if [ -f "best_sorted.m3u" ]; then
-        echo "[1] best_sorted.m3u (M3U格式)"
-        echo "    大小：$(wc -c < best_sorted.m3u) 字节"
-        echo "    修改时间：$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" best_sorted.m3u 2>/dev/null || stat -c "%y" best_sorted.m3u)"
-        echo ""
-    fi
-    
-    if [ -f "best_sorted.m3u8" ]; then
-        echo "[2] best_sorted.m3u8 (M3U8格式)"
-        echo "    大小：$(wc -c < best_sorted.m3u8) 字节"
-        echo "    修改时间：$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" best_sorted.m3u8 2>/dev/null || stat -c "%y" best_sorted.m3u8)"
-        echo ""
-    fi
-    
-    if [ ! -f "best_sorted.m3u" ] && [ ! -f "best_sorted.m3u8" ]; then
-        echo "暂无生成的文件"
-        echo ""
-    fi
-    
-    echo "请选择操作："
-    echo "  [1] 查看M3U文件"
-    echo "  [2] 查看M3U8文件"
-    echo "  [3] 打开文件所在目录"
-    echo "  [0] 返回主菜单"
-    echo ""
-    read -p "请选择操作 (0-3): " view_choice
-    
-    case $view_choice in
-        1)
-            if [ -f "best_sorted.m3u" ]; then
-                ${PAGER:-less} best_sorted.m3u
-            fi
+    case "${1:-}" in
+        --collect)
+            run_collection
             ;;
-        2)
-            if [ -f "best_sorted.m3u8" ]; then
-                ${PAGER:-less} best_sorted.m3u8
-            fi
-            ;;
-        3)
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                open .
-            else
-                xdg-open . 2>/dev/null || echo "无法打开文件管理器"
-            fi
-            ;;
-        0)
-            return 0
+        *)
+            setup_scheduled_task_and_web
             ;;
     esac
-    
-    return 0
 }
 
-# 清理临时文件
-cleanup() {
-    log_section "清理临时文件"
-    
-    echo "警告：此操作将删除以下文件："
-    echo "  - Python缓存文件 (__pycache__)"
-    echo "  - 临时文件 (*.pyc)"
-    echo "  - 虚拟环境 (venv/.venv)"
-    echo "  - 生成的播放列表 (best_sorted.m3u/m3u8)"
-    echo ""
-    read -p "确认清理？ (y/n): " confirm
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "已取消清理"
-        return 0
-    fi
-    
-    echo ""
-    echo "正在清理..."
-    
-    # 清理Python缓存
-    if [ -d "__pycache__" ]; then
-        rm -rf __pycache__
-        log_info "已清理：__pycache__"
-    fi
-    
-    # 清理.pyc文件
-    find . -name "*.pyc" -delete 2>/dev/null
-    log_info "已清理：*.pyc文件"
-    
-    # 清理虚拟环境
-    if [ -d "venv" ]; then
-        rm -rf venv
-        log_info "已清理：venv虚拟环境"
-    fi
-    
-    if [ -d ".venv" ]; then
-        rm -rf .venv
-        log_info "已清理：.venv虚拟环境"
-    fi
-    
-    # 清理生成的文件
-    if [ -f "best_sorted.m3u" ]; then
-        rm best_sorted.m3u
-        log_info "已清理：best_sorted.m3u"
-    fi
-    
-    if [ -f "best_sorted.m3u8" ]; then
-        rm best_sorted.m3u8
-        log_info "已清理：best_sorted.m3u8"
-    fi
-    
-    echo ""
-    log_info "清理完成！"
-    echo ""
-    
-    return 0
-}
+trap cleanup_exit INT TERM
 
-# 显示帮助
-show_help() {
-    log_section "帮助文档"
-    
-    echo "🎯 功能说明："
-    echo ""
-    echo "  [1] 环境检测与配置"
-    echo "     - 检测Python环境"
-    echo "     - 检测虚拟环境"
-    echo "     - 检测依赖包"
-    echo "     - 检测脚本文件"
-    echo "     - 检测网络连接"
-    echo ""
-    echo "  [2] 虚拟环境管理"
-    echo "     - 创建虚拟环境"
-    echo "     - 激活虚拟环境并安装依赖"
-    echo "     - 删除虚拟环境"
-    echo ""
-    echo "  [3] 运行IPTV采集"
-    echo "     - 自动检测并使用虚拟环境"
-    echo "     - 采集IPTV直播源"
-    echo "     - 智能分类和质量筛选"
-    echo "     - 生成M3U播放列表"
-    echo ""
-    echo "  [4] 启动本地网页服务"
-    echo "     - 提供网页界面"
-    echo "     - 支持搜索和筛选"
-    echo "     - 实时查看频道信息"
-    echo ""
-    echo "  [5] 配置定时任务"
-    echo "     - 创建定时任务脚本"
-    echo "     - 配置crontab定时任务"
-    echo "     - 实现自动更新"
-    echo ""
-    echo "  [6] 查看生成的文件"
-    echo "     - 查看M3U/M3U8文件"
-    echo "     - 打开文件所在目录"
-    echo ""
-    echo "  [7] 清理临时文件"
-    echo "     - 清理Python缓存"
-    echo "     - 清理虚拟环境"
-    echo "     - 清理生成的文件"
-    echo ""
-    echo "📖 详细文档："
-    echo "   - 查看README.md了解更多信息"
-    echo "   - 查看项目GitHub页面获取最新更新"
-    echo ""
-    
-    return 0
-}
-
-# 主菜单
-main_menu() {
-    while true; do
-        clear
-        echo ""
-        echo "╔════════════════════════════════════════════════════════════╗"
-        echo "║     IPTV直播源自动采集工具 - Linux/macOS完整版          ║"
-        echo "╚════════════════════════════════════════════════════════════╝"
-        echo ""
-        echo "📋 功能菜单："
-        echo ""
-        echo "  [1] 环境检测与配置"
-        echo "  [2] 虚拟环境管理"
-        echo "  [3] 运行IPTV采集"
-        echo "  [4] 启动本地网页服务"
-        echo "  [5] 配置定时任务"
-        echo "  [6] 查看生成的文件"
-        echo "  [7] 清理临时文件"
-        echo "  [8] 查看帮助文档"
-        echo "  [0] 退出程序"
-        echo ""
-        read -p "请选择功能 (0-8): " choice
-        
-        case $choice in
-            1)
-                check_environment
-                ;;
-            2)
-                venv_management
-                ;;
-            3)
-                run_collection
-                ;;
-            4)
-                start_web_server
-                ;;
-            5)
-                setup_scheduled_task
-                ;;
-            6)
-                view_files
-                ;;
-            7)
-                cleanup
-                ;;
-            8)
-                show_help
-                ;;
-            0)
-                echo ""
-                echo "感谢使用IPTV直播源自动采集工具！"
-                echo ""
-                exit 0
-                ;;
-            *)
-                echo ""
-                log_error "无效选项，请重新选择"
-                ;;
-        esac
-        
-        echo ""
-        read -p "按Enter键继续..."
-    done
-}
-
-# 程序入口
-main_menu
+main "$@"
