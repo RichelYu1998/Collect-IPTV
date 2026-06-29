@@ -70,6 +70,67 @@ def find_ffmpeg():
     return None
 
 
+def find_ffprobe():
+    if not FFMPEG_PATH:
+        return None
+    ffmpeg_dir = os.path.dirname(FFMPEG_PATH)
+    ffmpeg_name = os.path.basename(FFMPEG_PATH)
+    ffprobe_name = ffmpeg_name.replace('ffmpeg', 'ffprobe')
+    candidate = os.path.join(ffmpeg_dir, ffprobe_name)
+    if os.path.isfile(candidate):
+        return candidate
+    path = shutil.which('ffprobe') or shutil.which('ffprobe.exe')
+    if path:
+        return path
+    return None
+
+
+def probe_audio_info(url):
+    ffprobe_path = find_ffprobe()
+    if not ffprobe_path:
+        return {'has_audio': None, 'error': 'no_ffprobe'}
+
+    cmd = [
+        ffprobe_path,
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_streams',
+        '-select_streams', 'a',
+        '-analyzeduration', '5000000',
+        '-probesize', '5000000',
+        '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        url,
+    ]
+
+    try:
+        kwargs = {
+            'capture_output': True,
+            'text': True,
+            'timeout': 15,
+        }
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        result = subprocess.run(cmd, **kwargs)
+        data = json.loads(result.stdout)
+        streams = data.get('streams', [])
+        if not streams:
+            return {'has_audio': False, 'codecs': [], 'unsupported': []}
+        codecs = []
+        unsupported = []
+        for s in streams:
+            codec = s.get('codec_name', 'unknown')
+            codecs.append(codec)
+            if codec in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                unsupported.append(codec)
+        return {'has_audio': True, 'codecs': codecs, 'unsupported': unsupported}
+    except subprocess.TimeoutExpired:
+        return {'has_audio': None, 'error': 'timeout'}
+    except json.JSONDecodeError:
+        return {'has_audio': None, 'error': 'parse_error'}
+    except Exception as e:
+        return {'has_audio': None, 'error': str(e)}
+
+
 def start_transcode_session(url):
     with transcode_lock:
         session_id = hashlib.md5(url.encode()).hexdigest()[:12]
@@ -335,6 +396,16 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             session_id = path_part[5:].split('/')[0].split('?')[0]
             stop_transcode_session(session_id)
             self._send_json_response({'ok': True})
+            return
+
+        if path_part.startswith('probe/'):
+            encoded_url = path_part[6:]
+            target_url = urllib.parse.unquote(encoded_url)
+            if not target_url.startswith(('http://', 'https://')):
+                self._send_json_error(400, 'Invalid URL')
+                return
+            result = probe_audio_info(target_url)
+            self._send_json_response(result)
             return
 
         if path_part.startswith('check/'):

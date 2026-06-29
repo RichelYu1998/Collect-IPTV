@@ -435,12 +435,29 @@
         let currentTranscodeId = null;
         let transcodeCheckTimer = null;
         let ffmpegAvailable = null;
+        let audioProbeAbort = null;
 
         function proxyUrl(url) {
             if (!url) return '';
             if (url.startsWith('/') || url.startsWith(window.location.origin)) return url;
             const base = window.location.origin;
             return base + '/proxy/' + encodeURIComponent(url);
+        }
+
+        function tryPlayWithSound(video) {
+            const startBtn = document.getElementById('startPlayBtn');
+            const slider = document.getElementById('volumeSlider');
+            video.volume = slider ? parseFloat(slider.value) : 1;
+            video.muted = false;
+            video.play().then(() => {
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.add('hidden');
+            }).catch(() => {
+                video.muted = true;
+                video.play().catch(() => {});
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.remove('hidden');
+            });
         }
 
         function playChannel(url, name) {
@@ -462,8 +479,9 @@
             if (errorDiv) errorDiv.classList.add('hidden');
             if (startBtn) startBtn.classList.add('hidden');
 
-            video.muted = true;
-            video.volume = parseFloat(document.getElementById('volumeSlider') ? document.getElementById('volumeSlider').value : 1);
+            const slider = document.getElementById('volumeSlider');
+            video.volume = slider ? parseFloat(slider.value) : 1;
+            video.muted = false;
             updateVolumeUI();
 
             overlay.classList.remove('hidden');
@@ -472,6 +490,8 @@
             destroyHls();
 
             const proxiedUrl = proxyUrl(url);
+
+            probeAudioInfo(url);
 
             if (Hls.isSupported()) {
                 currentHls = new Hls({
@@ -484,12 +504,11 @@
                 currentHls.attachMedia(video);
                 currentHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
                     if (loading) loading.classList.add('hidden');
-                    video.play().catch(() => {});
-                    if (startBtn) startBtn.classList.remove('hidden');
-                    checkAudioTracks(data);
+                    tryPlayWithSound(video);
+                    checkAudioTracksFromHls(data);
                 });
                 currentHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
-                    checkAudioTracks(data);
+                    checkAudioTracksFromHls(data);
                 });
                 currentHls.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
@@ -508,15 +527,18 @@
                                 break;
                         }
                     } else if (data.details && data.details.indexOf('audio') !== -1) {
-                        showAudioWarning('音频解码失败，该频道可能使用了浏览器不支持的音频编码');
+                        if (!currentTranscodeId) {
+                            startAudioTranscode('');
+                        } else {
+                            showAudioWarning('音频解码失败，该频道可能使用了浏览器不支持的音频编码');
+                        }
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = proxiedUrl;
                 video.addEventListener('loadedmetadata', () => {
                     if (loading) loading.classList.add('hidden');
-                    video.play().catch(() => {});
-                    if (startBtn) startBtn.classList.remove('hidden');
+                    tryPlayWithSound(video);
                 }, { once: true });
                 video.addEventListener('error', () => {
                     if (loading) loading.classList.add('hidden');
@@ -528,48 +550,66 @@
             }
         }
 
-        function checkAudioTracks(data) {
-            const audioWarning = document.getElementById('audioWarning');
-            if (!audioWarning || !currentHls) {
-                if (audioWarning) audioWarning.classList.add('hidden');
-                return;
-            }
+        function checkAudioTracksFromHls(data) {
+            if (!currentHls || currentTranscodeId) return;
 
             const levels = currentHls.levels || [];
-            let hasUnsupportedAudio = false;
-            let audioCodecName = '';
-
             for (const level of levels) {
                 if (level.audioCodec) {
-                    audioCodecName = level.audioCodec;
                     const codec = level.audioCodec.toLowerCase();
                     if (codec.indexOf('ac-3') !== -1 || codec.indexOf('ac3') !== -1 ||
                         codec.indexOf('ec-3') !== -1 || codec.indexOf('eac3') !== -1) {
-                        hasUnsupportedAudio = true;
-                        break;
+                        if (audioProbeAbort) {
+                            audioProbeAbort.abort();
+                            audioProbeAbort = null;
+                        }
+                        startAudioTranscode(level.audioCodec);
+                        return;
                     }
                 }
             }
+        }
 
-            if (hasUnsupportedAudio) {
-                startAudioTranscode(audioCodecName);
-                return;
+        async function probeAudioInfo(url) {
+            const audioWarning = document.getElementById('audioWarning');
+            if (!audioWarning) return;
+
+            if (audioProbeAbort) {
+                audioProbeAbort.abort();
             }
+            audioProbeAbort = new AbortController();
 
-            const audioTracks = currentHls.audioTracks || [];
-            let hasAudioCodec = false;
-            for (const level of levels) {
-                if (level.audioCodec || (level.audioGroup && level.audioGroup.length > 0)) {
-                    hasAudioCodec = true;
-                    break;
+            try {
+                const resp = await fetch('/transcode/probe/' + encodeURIComponent(url), {
+                    signal: audioProbeAbort.signal
+                });
+                const data = await resp.json();
+
+                if (!currentHls || currentPlayUrl !== url) return;
+
+                if (data.error) {
+                    audioWarning.classList.add('hidden');
+                    return;
+                }
+
+                if (data.has_audio === false) {
+                    showAudioWarning('该频道无音频轨道（仅视频流）');
+                    return;
+                }
+
+                if (data.has_audio === true && data.unsupported && data.unsupported.length > 0) {
+                    const codecName = data.unsupported[0].toUpperCase();
+                    startAudioTranscode(codecName);
+                    return;
+                }
+
+                audioWarning.classList.add('hidden');
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                if (audioWarning && currentHls && currentPlayUrl === url) {
+                    audioWarning.classList.add('hidden');
                 }
             }
-            if (audioTracks.length === 0 && levels.length > 0 && !hasAudioCodec) {
-                showAudioWarning('该频道可能无音频轨道（仅视频流）');
-                return;
-            }
-
-            audioWarning.classList.add('hidden');
         }
 
         async function startAudioTranscode(codecName) {
@@ -674,17 +714,7 @@
                 currentHls.attachMedia(video);
                 currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
                     if (loading) loading.classList.add('hidden');
-                    const slider = document.getElementById('volumeSlider');
-                    video.volume = slider ? parseFloat(slider.value) : 1;
-                    video.muted = false;
-                    video.play().then(() => {
-                        updateVolumeUI();
-                    }).catch(() => {
-                        video.muted = true;
-                        video.play().catch(() => {});
-                        updateVolumeUI();
-                    });
-                    if (startBtn) startBtn.classList.remove('hidden');
+                    tryPlayWithSound(video);
                 });
                 currentHls.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
@@ -700,10 +730,7 @@
                 video.src = transcodeUrl;
                 video.addEventListener('loadedmetadata', () => {
                     if (loading) loading.classList.add('hidden');
-                    video.volume = parseFloat(document.getElementById('volumeSlider') ? document.getElementById('volumeSlider').value : 1);
-                    video.muted = false;
-                    video.play().catch(() => {});
-                    if (startBtn) startBtn.classList.remove('hidden');
+                    tryPlayWithSound(video);
                 }, { once: true });
             }
 
@@ -734,21 +761,8 @@
             const video = document.getElementById('videoPlayer');
             const startBtn = document.getElementById('startPlayBtn');
             if (!video) return;
-            const slider = document.getElementById('volumeSlider');
-            const vol = slider ? parseFloat(slider.value) : 1;
-            video.volume = vol;
-            video.muted = false;
-            video.play().then(() => {
-                updateVolumeUI();
-            }).catch(() => {
-                video.muted = true;
-                video.play().then(() => {
-                    updateVolumeUI();
-                }).catch(() => {});
-                updateVolumeUI();
-            });
-            if (startBtn) startBtn.classList.add('hidden');
-              setTimeout(() => checkAudioTracksDelayed(), 3000);
+            tryPlayWithSound(video);
+            setTimeout(() => checkAudioTracksDelayed(), 3000);
         }
 
         function checkAudioTracksDelayed() {
@@ -756,27 +770,10 @@
             const audioWarning = document.getElementById('audioWarning');
             if (!video || !currentHls || !audioWarning) return;
 
-            if (audioWarning.classList.contains('hidden')) {
-                checkAudioTracks({});
-            }
+            if (!audioWarning.classList.contains('hidden')) return;
 
-            if (!currentTranscodeId && !video.muted && video.volume > 0 && currentHls.levels && currentHls.levels.length > 0) {
-                let hasSupportedAudio = false;
-                for (const level of currentHls.levels) {
-                    if (level.audioCodec) {
-                        const codec = level.audioCodec.toLowerCase();
-                        if (codec.indexOf('aac') !== -1 || codec.indexOf('mp4a') !== -1 || codec.indexOf('opus') !== -1) {
-                            hasSupportedAudio = true;
-                            break;
-                        }
-                    } else {
-                        hasSupportedAudio = true;
-                        break;
-                    }
-                }
-                if (!hasSupportedAudio) {
-                    startAudioTranscode(currentHls.levels[0].audioCodec || '');
-                }
+            if (!currentTranscodeId) {
+                probeAudioInfo(currentPlayUrl);
             }
         }
 
@@ -827,6 +824,10 @@
             if (currentHls) {
                 currentHls.destroy();
                 currentHls = null;
+            }
+            if (audioProbeAbort) {
+                audioProbeAbort.abort();
+                audioProbeAbort = null;
             }
             const video = document.getElementById('videoPlayer');
             video.removeAttribute('src');
@@ -881,6 +882,16 @@
             }
         });
 
+        document.addEventListener('click', () => {
+            const video = document.getElementById('videoPlayer');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (video && video.muted && !video.paused && currentHls) {
+                video.muted = false;
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.add('hidden');
+            }
+        }, true);
+
         window.addEventListener('DOMContentLoaded', loadData);
     </script>
 
@@ -916,7 +927,7 @@
                 <video id="videoPlayer" class="w-full h-full" playsinline></video>
                 <div id="startPlayBtn" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 cursor-pointer hidden" onclick="startPlay()">
                     <i class="fa fa-play-circle text-white text-6xl mb-3 opacity-90 hover:opacity-100 transition-opacity"></i>
-                    <p class="text-white text-sm">点击播放（开启声音）</p>
+                    <p class="text-white text-sm">点击开启声音</p>
                 </div>
                 <div id="playerLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 hidden pointer-events-none">
                     <div class="inline-block w-10 h-10 border-4 border-gray-600 border-t-green-400 rounded-full animate-spin mb-3"></div>

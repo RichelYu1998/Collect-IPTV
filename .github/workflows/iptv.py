@@ -39,8 +39,8 @@ def normalize_text_for_match(text: str) -> str:
 
 # 配置
 CONFIG = {
-    "timeout": int(os.environ.get("IPTV_TIMEOUT", "3")),
-    "max_parallel": int(os.environ.get("IPTV_MAX_PARALLEL", "30")),
+    "timeout": int(os.environ.get("IPTV_TIMEOUT", "5")),
+    "max_parallel": int(os.environ.get("IPTV_MAX_PARALLEL", "200")),
     "output_file": os.environ.get("IPTV_OUTPUT_FILE", "best_sorted.m3u"),
     "connect_timeout": int(os.environ.get("IPTV_CONNECT_TIMEOUT", "3")),
     "dns_cache_ttl": int(os.environ.get("IPTV_DNS_CACHE_TTL", "300")),
@@ -476,23 +476,31 @@ async def load_online_geo_tokens(
     province_channels: Dict[str, Set[str]]
 ) -> Dict[str, Set[str]]:
     cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
-    best_url = None
-    best_latency = float('inf')
     print("Testing geo data CDN sources...")
-    for url in ONLINE_GEO_DATA_URLS:
+
+    async def _test_geo_cdn(url):
         try:
             start = time.time()
             async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
                 if resp.status < 400:
-                    latency = time.time() - start
-                    print(f"  {url}: {latency:.3f}s")
-                    if latency < best_latency:
-                        best_latency = latency
-                        best_url = url
-                else:
-                    print(f"  {url}: HTTP {resp.status}")
-        except Exception as e:
-            print(f"  {url}: failed ({type(e).__name__})")
+                    return url, time.time() - start
+                return url, None
+        except Exception:
+            return url, None
+
+    results = await asyncio.gather(*[_test_geo_cdn(url) for url in ONLINE_GEO_DATA_URLS])
+
+    best_url = None
+    best_latency = float('inf')
+    for url, latency in results:
+        if latency is not None:
+            print(f"  {url}: {latency:.3f}s")
+            if latency < best_latency:
+                best_latency = latency
+                best_url = url
+        else:
+            print(f"  {url}: failed")
+
     if not best_url:
         print("  All geo CDN sources failed, skipping online geo tokens.")
         return {}
@@ -751,12 +759,16 @@ def extract_urls_from_m3u(content):
 
 # 测试 IPTV 链接的可用性和速度
 async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str):
-    """测试 IPTV 链接的可用性和速度 - 使用 HEAD 请求快速检测"""
+    """测试 IPTV 链接的可用性和速度 - 使用 GET 请求读取少量数据快速检测"""
     async with semaphore:
         start_time = time.time()
         try:
-            async with session.head(url, timeout=CONFIG["timeout"], allow_redirects=True) as response:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=CONFIG["timeout"], connect=CONFIG["connect_timeout"]), allow_redirects=True) as response:
                 if response.status < 400:
+                    try:
+                        await response.content.read(1024)
+                    except Exception:
+                        pass
                     elapsed_time = time.time() - start_time
                     return True, elapsed_time
                 return False, None
@@ -936,34 +948,43 @@ def load_province_channels(files):
 
 
 async def _select_fastest_source_cdns(source_groups):
-    """对每个 IPTV 源的多个 CDN 镜像做轮询测速，选最快的 URL。"""
+    """对每个 IPTV 源的多个 CDN 镜像并行测速，选最快的 URL。"""
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
-    connector = aiohttp.TCPConnector(limit=10, ttl_dns_cache=CONFIG["dns_cache_ttl"],
+    connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=CONFIG["dns_cache_ttl"],
                                      ssl=ssl_context, force_close=True, enable_cleanup_closed=True)
+
+    async def _test_one_cdn(session, url):
+        try:
+            start = time.time()
+            async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
+                if resp.status < 400:
+                    return url, time.time() - start
+                return url, None
+        except Exception:
+            return url, None
+
     selected_urls = []
     print("Testing IPTV source CDN mirrors...")
     async with aiohttp.ClientSession(timeout=cdn_timeout, connector=connector) as session:
         for group in source_groups:
             name = group["name"]
+            tasks = [_test_one_cdn(session, url) for url in group["urls"]]
+            results = await asyncio.gather(*tasks)
+
             best_url = None
             best_latency = float('inf')
-            for url in group["urls"]:
-                try:
-                    start = time.time()
-                    async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
-                        if resp.status < 400:
-                            latency = time.time() - start
-                            print(f"  {name} | {url}: {latency:.3f}s")
-                            if latency < best_latency:
-                                best_latency = latency
-                                best_url = url
-                        else:
-                            print(f"  {name} | {url}: HTTP {resp.status}")
-                except Exception:
+            for url, latency in results:
+                if latency is not None:
+                    print(f"  {name} | {url}: {latency:.3f}s")
+                    if latency < best_latency:
+                        best_latency = latency
+                        best_url = url
+                else:
                     print(f"  {name} | {url}: failed")
+
             if best_url:
                 selected_urls.append(best_url)
                 print(f"  -> Selected: {best_url} ({best_latency:.3f}s)")
@@ -979,10 +1000,7 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
     """主函数处理多个文件"""
     asyncio.get_event_loop().set_exception_handler(_suppress_asyncio_exception)
 
-    # 加载 CCTV 频道列表
     cctv_channels = load_cctv_channels(cctv_channel_file)
-
-    # 加载多个省份频道列表
     province_channels = load_province_channels(province_channel_files)
 
     all_valid_entries: List[Dict[str, Any]] = []
@@ -1003,14 +1021,13 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
         else:
             print("Online geo tokens unavailable, fallback to local province txt only.")
 
+        tasks = []
         for file_url in file_urls:
-            if file_url.endswith(('.m3u', '.m3u8')):
-                valid_entries = await read_and_test_file(session, semaphore, file_url, is_m3u=True)
-            elif file_url.endswith('.txt'):
-                valid_entries = await read_and_test_file(session, semaphore, file_url, is_m3u=False)
-            else:
-                valid_entries = []
+            is_m3u = file_url.endswith(('.m3u', '.m3u8'))
+            tasks.append(read_and_test_file(session, semaphore, file_url, is_m3u=is_m3u))
 
+        results = await asyncio.gather(*tasks)
+        for valid_entries in results:
             all_valid_entries.extend(valid_entries)
 
     deduplicated_entries = deduplicate_candidate_entries(all_valid_entries)
