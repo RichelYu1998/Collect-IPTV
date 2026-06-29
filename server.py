@@ -40,7 +40,7 @@ transcode_lock = threading.Lock()
 audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent
 FFMPEG_INSTALL_DIR = PROJECT_ROOT / 'ffmpeg'
 
 M3U8_CONTENT_TYPES = (

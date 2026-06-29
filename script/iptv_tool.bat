@@ -188,7 +188,7 @@ if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
 )
 
 echo [*] Running cross-platform FFmpeg setup...
-%PYTHON_CMD% "%CD%\script\server.py" --setup-ffmpeg
+%PYTHON_CMD% "%~dp0..\server.py" --setup-ffmpeg
 if errorlevel 1 (
     echo [WARNING] FFmpeg auto-install failed, AC3/EAC3 audio will have no sound in browser
     goto :eof
@@ -472,8 +472,8 @@ echo ========================================
 echo.
 
 call %VENV_PATH%\Scripts\activate.bat
-cd /d "%~dp0"
-%PYTHON_CMD% "%~dp0script\server.py" %SERVER_PORT%
+cd /d "%~dp0.."
+%PYTHON_CMD% "%~dp0..\server.py" %SERVER_PORT%
 pause
 exit /b 0
 

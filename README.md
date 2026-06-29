@@ -30,17 +30,15 @@
 
 #### Windows用户
 ```cmd
-# 双击运行或在命令行执行
-iptv_tool.bat
+# 双击运行或在命令行执行（从项目根目录）
+.\script\iptv_tool.bat
 ```
 
 #### Linux/macOS用户
 ```bash
-# 添加执行权限
-chmod +x iptv_tool.sh
-
-# 运行工具
-./iptv_tool.sh
+# 添加执行权限并运行（从项目根目录）
+chmod +x script/iptv_tool.sh
+./script/iptv_tool.sh
 ```
 
 ### 🔄 自动运行流程
@@ -125,21 +123,16 @@ chmod +x iptv_tool.sh
 
 ## 📂 项目文件说明
 
-### 核心脚本
-
-| 文件名 | 平台 | 说明 |
-|--------|------|------|
-| [iptv_tool.bat](iptv_tool.bat) | Windows | 一键启动工具 |
-| [iptv_tool.sh](iptv_tool.sh) | Linux/macOS | 一键启动工具 |
-
 ### 核心文件
 
 | 文件/目录 | 说明 |
 |-----------|------|
-| [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本（含FFmpeg安装功能）|
+| [server.py](server.py) | Web服务器 + FFmpeg自动安装（一体化）|
+| [script/iptv_tool.bat](script/iptv_tool.bat) | Windows一键启动工具 |
+| [script/iptv_tool.sh](script/iptv_tool.sh) | Linux/macOS一键启动工具 |
+| [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本 |
 | [.github/workflows/index.html](.github/workflows/index.html) | 网页界面（含HLS在线播放）|
 | [.github/workflows/IPTV/](.github/workflows/IPTV/) | 频道配置目录 |
-| [script/](script/) | 辅助脚本目录 |
 | [file/](file/) | 生成文件和数据目录 |
 
 ### 📁 完整项目结构
@@ -156,16 +149,17 @@ Collect-IPTV/
 │       ├── iptv.py                 # 核心脚本（含FFmpeg功能）
 │       ├── index.html              # 网页界面
 │       └── iptv.yml                # 配置文件
-├── script/                         # 辅助脚本目录
-│   └── server.py                  # Web服务器 + FFmpeg安装（一体化）
+├── server.py                        # Web服务器 + FFmpeg安装（一体化）
+├── script/                         # 启动脚本目录
+│   ├── iptv_tool.bat              # Windows启动脚本
+│   └── iptv_tool.sh               # Linux/macOS启动脚本
 ├── file/                           # 生成文件目录
 │   ├── best_sorted.m3u            # M3U播放列表
 │   ├── best_sorted.m3u8           # M3U8播放列表
 │   └── bat_*.txt                  # 测试日志
 ├── ffmpeg/                         # FFmpeg安装目录
-├── .venv/                          # Python虚拟环境
-├── iptv_tool.bat                   # Windows启动脚本（根目录）
-├── iptv_tool.sh                    # Linux/macOS启动脚本（根目录）
+├── .venv/                          # Python虚拟环境（唯一）
+├── server.py                       # Web服务器 + FFmpeg安装
 ├── README.md                       # 完整文档
 ├── LICENSE                         # 许可证
 └── .gitignore                      # Git忽略规则
@@ -175,11 +169,13 @@ Collect-IPTV/
 
 | 方面 | 优化前 | 优化后 |
 |------|--------|--------|
-| **根目录文件数** | 15+ 个 | 6 个核心文件 |
+| **根目录文件数** | 15+ 个 | **7 个核心文件** |
 | **代码分散度** | 6个独立Python脚本 | **2个核心脚本**（iptv.py + server.py）|
-| **script/目录** | 6个.py文件 | **1个一体化脚本**（server.py）|
+| **启动脚本位置** | 根目录散乱 | **统一在 script/ 目录** |
+| **server.py位置** | 埋在 script/ 子目录 | **提升到根目录**（便于直接调用）|
+| **虚拟环境数量** | 可能多个 .venv | **唯一 .venv/** ✅ |
 | **文档数量** | 多个MD文件 | 1个完整文档（README.md）|
-| **文件分类** | 混乱 | 清晰（script/ file/）|
+| **文件分类** | 混乱 | **清晰规范** |
 | **可维护性** | 中等 | **优秀** |
 | **CDN测速性能** | 2.8s (串行) | <0.1s (缓存) / 首次3.1s (并行) |
 | **采集速度** | 基准速度 | 提升5-10倍 |
@@ -192,20 +188,29 @@ Collect-IPTV/
 - [ ] 为 `script/` 下的工具函数添加单元测试
 - [ ] 支持更多音频编码格式自动转码
 
-### 脚本目录 (script/)
+### 脚本目录 (script/) - 启动脚本
 
 | 文件名 | 说明 |
 |--------|------|
-| [server.py](script/server.py) | 本地Web服务器（**含CORS代理 + FFmpeg自动安装**）|
+| [iptv_tool.bat](script/iptv_tool.bat) | Windows一键启动（环境检测+采集+Web服务）|
+| [iptv_tool.sh](script/iptv_tool.sh) | Linux/macOS一键启动 |
 
 **使用方式：**
 ```bash
-# 启动Web服务器（默认）
-python script/server.py 8000
+# Windows - 双击或命令行运行
+.\script\iptv_tool.bat
 
-# 独立运行FFmpeg安装
-python script/server.py --setup-ffmpeg
+# Linux/macOS - 添加执行权限后运行
+chmod +x script/iptv_tool.sh
+./script/iptv_tool.sh
 ```
+
+### 核心服务 (server.py)
+
+| 功能 | 命令 |
+|------|------|
+| **启动Web服务器** | `python server.py 8000` |
+| **独立安装FFmpeg** | `python server.py --setup-ffmpeg` |
 
 ### 生成文件 (file/)
 
@@ -624,6 +629,14 @@ https://zilong7728.github.io/Collect-IPTV/
 
 ## 📝 更新日志
 
+### v2.4.2 (2026-06-29) - 文件位置优化：启动脚本归位、server.py 提权
+- ✅ **调整文件组织**：将 `iptv_tool.bat` / `iptv_tool.sh` 移入 `script/` 目录（统一管理）
+- ✅ **server.py 提升到根目录**：从 `script/` 移出，便于直接调用 `python server.py`
+- ✅ **修复路径引用**：更新 bat 文件中的所有相对路径（使用 `%~dp0..` 访问根目录）
+- ✅ **清理重复 .venv**：删除 `script/.venv`，确保只有唯一的根目录 `.venv/`
+- ✅ **优化 PROJECT_ROOT**：`Path(__file__).parent` 适配新位置
+- ✅ **文档全面更新**：反映新的文件结构和命令示例
+
 ### v2.4.0 (2026-06-29) - 项目结构重组与一体化整合
 - ✅ **重大重构：FFmpeg 功能整合进 server.py**，删除 5 个独立脚本（setup_ffmpeg.py, download_ffmpeg.py, extract_ffmpeg.py, _download.py, fix_path.py）
 - ✅ **script/ 目录精简**：从 6 个 .py 文件缩减为 1 个一体化脚本 `server.py`（Web服务器 + FFmpeg自动安装）
@@ -759,10 +772,10 @@ python3 iptv_tool.py
 
 ```bash
 # 通过 server.py 安装 FFmpeg（推荐）
-python script/server.py --setup-ffmpeg
+python server.py --setup-ffmpeg
 
 # 或 Python 3
-python3 script/server.py --setup-ffmpeg
+python3 server.py --setup-ffmpeg
 ```
 
 ### 🔧 手动安装方法
@@ -771,7 +784,7 @@ python3 script/server.py --setup-ffmpeg
 
 ##### 方法 A: 使用 server.py 一体化脚本（推荐）
 ```bash
-python script/server.py --setup-ffmpeg
+python server.py --setup-ffmpeg
 ```
 
 ##### 方法 B: 手动下载
@@ -798,7 +811,7 @@ winget install ffmpeg
 
 ##### 方法 A: 使用 server.py 一体化脚本（推荐）
 ```bash
-python3 script/server.py --setup-ffmpeg
+python3 server.py --setup-ffmpeg
 ```
 
 ##### 方法 B: Homebrew（推荐）
