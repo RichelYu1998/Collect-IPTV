@@ -164,8 +164,8 @@ Collect-IPTV/
 │   └── bat_*.txt                  # 测试日志
 ├── ffmpeg/                         # FFmpeg安装目录
 ├── .venv/                          # Python虚拟环境
-├── iptv_tool.bat                   # Windows启动脚本
-├── iptv_tool.sh                    # Linux/macOS启动脚本
+├── iptv_tool.bat                   # Windows启动脚本（根目录）
+├── iptv_tool.sh                    # Linux/macOS启动脚本（根目录）
 ├── README.md                       # 完整文档
 ├── LICENSE                         # 许可证
 └── .gitignore                      # Git忽略规则
