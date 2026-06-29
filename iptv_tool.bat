@@ -219,21 +219,25 @@ for /L %%i in (0,1,4) do (
             )
         )
     )
-)
-
 if "!BEST_CDN_URL!"=="" (
     echo [WARNING] All FFmpeg CDN sources unreachable
     echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+)
+
+for /L %%i in (0,1,4) do (
+    for /f "tokens=1 delims=|" %%a in ("!FFMPEG_CDNS[%%i]!") do set "CDN_URL_%%i=%%a"
+)
     exit /b 0
 )
 
 echo.
-echo [*] Fastest FFmpeg CDN: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
+echo [*] Fastest CDN for connection: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
+echo     Will try all sources, auto-switching if too slow...
 
 set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
 
-echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
-%PYTHON_CMD% "%~dp0_download.py" "!BEST_CDN_URL!" "%FFMPEG_ZIP%"
+echo [2/3] Downloading FFmpeg...
+%PYTHON_CMD% "%~dp0_download.py" "%FFMPEG_ZIP%" "!CDN_URL_0!" "!CDN_URL_1!" "!CDN_URL_2!" "!CDN_URL_3!" "!CDN_URL_4!"
 if errorlevel 1 (
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
     echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
