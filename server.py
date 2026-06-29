@@ -334,11 +334,18 @@ def find_ffmpeg():
         common_paths = [
             '/usr/local/bin/ffmpeg',
             '/usr/bin/ffmpeg',
-            '/opt/homebrew/bin/ffmpeg',
             '/snap/bin/ffmpeg',
-            '/flatpak/ bin/ffmpeg',
+            '/flatpak/bin/ffmpeg',
         ]
         
+        homebrew_prefix = os.environ.get('HOMEBREW_PREFIX', '')
+        if homebrew_prefix and os.path.isdir(homebrew_prefix):
+            homebrew_bin = os.path.join(homebrew_prefix, 'bin', 'ffmpeg')
+            if homebrew_bin not in common_paths:
+                common_paths.insert(3, homebrew_bin)
+        elif os.path.isdir('/opt/homebrew'):
+            common_paths.append('/opt/homebrew/bin/ffmpeg')
+            
         for fp in common_paths:
             if os.path.isfile(fp):
                 return fp

@@ -25,6 +25,8 @@ FFMPEG_DIR = PROJECT_ROOT / 'ffmpeg'
 FILE_DIR = PROJECT_ROOT / 'file'
 STREAM_CACHE_FILE = FILE_DIR / '.stream_cache.json'
 STREAM_CACHE_TTL = 4 * 3600  # 流测试缓存有效期：4小时
+SOURCE_CACHE_FILE = FILE_DIR / '.source_cache.json'  # IPTV源文件内容缓存
+SOURCE_CACHE_TTL = 2 * 3600  # 源文件缓存有效期：2小时
 
 
 def _suppress_asyncio_exception(loop, context):
@@ -62,7 +64,7 @@ CONFIG = {
     "cdn_cache_ttl_hours": int(os.environ.get("IPTV_CDN_CACHE_TTL", "6")),
 }
 
-CDN_CACHE_FILE = os.path.join(os.path.dirname(__file__) or ".", ".cdn_cache.json")
+CDN_CACHE_FILE = FILE_DIR / '.cdn_cache.json'
 
 def detect_os():
     system = platform.system().lower()
@@ -1155,6 +1157,36 @@ def save_stream_cache(cache_data):
         print(f"Failed to save stream cache: {e}")
 
 
+def load_source_cache():
+    """加载IPTV源文件内容缓存"""
+    if SOURCE_CACHE_FILE.exists():
+        try:
+            cache_age = time.time() - SOURCE_CACHE_FILE.stat().st_mtime
+            if cache_age < SOURCE_CACHE_TTL:
+                with open(SOURCE_CACHE_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                print(f"Loaded source cache: {len(data)} files (age: {cache_age/60:.0f}min)")
+                return data
+            else:
+                print(f"Source cache expired (age: {cache_age/3600:.1f}h > {SOURCE_CACHE_TTL/3600}h)")
+        except Exception as e:
+            print(f"Failed to load source cache: {e}")
+    else:
+        print("No source cache found")
+    return {}
+
+
+def save_source_cache(cache_data):
+    """保存IPTV源文件内容缓存"""
+    try:
+        FILE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(SOURCE_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f)
+        print(f"Saved source cache: {len(cache_data)} files")
+    except Exception as e:
+        print(f"Failed to save source cache: {e}")
+
+
 # 测试 IPTV 链接的可用性和速度（带缓存）
 async def test_stream(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, stream_cache=None):
     """测试 IPTV 链接的可用性和速度 - 使用 GET 请求读取少量数据快速检测，支持结果缓存"""
@@ -1207,36 +1239,59 @@ async def read_and_test_file(
     semaphore: asyncio.Semaphore,
     file_path: str,
     is_m3u: bool = False,
-    stream_cache=None
+    stream_cache=None,
+    source_cache=None
 ):
-    """读取文件并提取 URL 进行测试"""
-    try:
-        async with session.get(file_path, timeout=CONFIG["timeout"]) as response:
-            if response.status != 200:
-                return []
-            content = await response.text(errors="ignore")
+    """读取文件并提取 URL 进行测试 - 支持源文件内容和流测试双重缓存"""
+    content = None
+    cache_hit = False
 
-        if is_m3u:
-            entries = extract_urls_from_m3u(content)
-        else:
-            entries = extract_urls_from_txt(content)
-        entries = deduplicate_candidate_entries(entries)
+    if source_cache is not None and file_path in source_cache:
+        cached = source_cache[file_path]
+        if cached.get("content"):
+            content = cached["content"]
+            cache_hit = True
+            print(f"  Source cache hit: {file_path[:50]}... ({len(content)} chars)")
 
-        valid_entries: List[Dict[str, Any]] = []
-        results = await test_multiple_streams(session, semaphore, entries, stream_cache)
-        for (is_valid, latency), entry in zip(results, entries):
-            if is_valid:
-                valid_entries.append({
-                    "channel": entry["channel"],
-                    "url": entry["url"],
-                    "source_group_title": entry.get("source_group_title"),
-                    "latency": latency,
-                })
+    if content is None:
+        try:
+            async with session.get(file_path, timeout=CONFIG["timeout"]) as response:
+                if response.status != 200:
+                    return []
+                content = await response.text(errors="ignore")
 
-        return valid_entries
+            if source_cache is not None:
+                source_cache[file_path] = {
+                    "content": content,
+                    "timestamp": time.time(),
+                    "size": len(content)
+                }
+                print(f"  Downloaded & cached: {file_path[:50]}... ({len(content)} chars)")
 
-    except Exception:
-        return []
+        except Exception:
+            return []
+
+    if is_m3u:
+        entries = extract_urls_from_m3u(content)
+    else:
+        entries = extract_urls_from_txt(content)
+    entries = deduplicate_candidate_entries(entries)
+
+    if not cache_hit:
+        print(f"  Extracted {len(entries)} URLs from {file_path[:30]}...")
+
+    valid_entries: List[Dict[str, Any]] = []
+    results = await test_multiple_streams(session, semaphore, entries, stream_cache)
+    for (is_valid, latency), entry in zip(results, entries):
+        if is_valid:
+            valid_entries.append({
+                "channel": entry["channel"],
+                "url": entry["url"],
+                "source_group_title": entry.get("source_group_title"),
+                "latency": latency,
+            })
+
+    return valid_entries
 
 
 # 生成排序后的 M3U 和 M3U8 文件
@@ -1464,16 +1519,18 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
             print("Online geo tokens unavailable, fallback to local province txt only.")
 
         stream_cache = load_stream_cache()
+        source_cache = load_source_cache()
         tasks = []
         for file_url in file_urls:
             is_m3u = file_url.endswith(('.m3u', '.m3u8'))
-            tasks.append(read_and_test_file(session, semaphore, file_url, is_m3u=is_m3u, stream_cache=stream_cache))
+            tasks.append(read_and_test_file(session, semaphore, file_url, is_m3u=is_m3u, stream_cache=stream_cache, source_cache=source_cache))
 
         results = await asyncio.gather(*tasks)
         for valid_entries in results:
             all_valid_entries.extend(valid_entries)
 
     save_stream_cache(stream_cache)
+    save_source_cache(source_cache)
 
     deduplicated_entries = deduplicate_candidate_entries(all_valid_entries)
     best_entries = select_best_streams(deduplicated_entries)
