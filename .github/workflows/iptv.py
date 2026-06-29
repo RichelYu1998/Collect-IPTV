@@ -1006,5 +1006,10 @@ if __name__ == "__main__":
         ".github/workflows/IPTV/北京频道.txt"
     ]
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(script_dir))
+    if os.path.isdir(os.path.join(project_root, '.github')):
+        os.chdir(project_root)
+
     # 执行主函数
     asyncio.run(main(file_urls, cctv_channel_file, province_channel_files))

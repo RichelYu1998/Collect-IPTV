@@ -349,14 +349,14 @@ setup_scheduled_task_and_web() {
     echo ""
 
     source "$VENV_PATH/bin/activate"
-    $PYTHON_CMD server.py 8000
+    $PYTHON_CMD "$WORK_DIR/server.py" 8000
     cd "$WORK_DIR"
 }
 
 cleanup_exit() {
     echo ""
     echo "Cleaning up processes..."
-    pkill -f "http.server 8000" >/dev/null 2>&1
+    pkill -f "server.py 8000" >/dev/null 2>&1
     echo "Done"
     exit 0
 }

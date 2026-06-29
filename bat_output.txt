@@ -1,0 +1,74 @@
+========================================
+IPTV Live Stream Collection Tool - v2.0.0
+========================================
+
+========================================
+Environment Detection and Configuration
+========================================
+[1/5] Detecting Python environment...
+
+Python version:
+Python 3.14.3
+[*] Checking virtual environment status...
+Not in virtual environment
+[2/5] Testing PIP mirror sources...
+    Testing Tsinghua...
+        Tsinghua: 0.032855s (32ms
+    Testing Aliyun...
+        Aliyun: 0.045433s (45ms
+    Testing Douban...
+        Douban: 0.036327s (36ms
+    Testing USTC...
+        USTC: 0.016532s (16ms
+
+[*] Fastest PIP mirror: USTC (16ms
+[3/5] Detecting Python virtual environment...
+Found virtual environment: venv
+[4/5] Setting up Python virtual environment and installing dependencies...
+[*] Configuring PIP mirror: https://pypi.mirrors.ustc.edu.cn/simple/
+Installing Python dependencies...
+Looking in indexes: https://pypi.mirrors.ustc.edu.cn/simple/
+Requirement already satisfied: pip in .\venv\Lib\site-packages (26.1.2)
+Looking in indexes: https://pypi.mirrors.ustc.edu.cn/simple/
+Requirement already satisfied: aiohttp in .\venv\Lib\site-packages (3.13.5)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in .\venv\Lib\site-packages (from aiohttp) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in .\venv\Lib\site-packages (from aiohttp) (1.4.0)
+Requirement already satisfied: attrs>=17.3.0 in .\venv\Lib\site-packages (from aiohttp) (26.1.0)
+Requirement already satisfied: frozenlist>=1.1.1 in .\venv\Lib\site-packages (from aiohttp) (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in .\venv\Lib\site-packages (from aiohttp) (6.7.1)
+Requirement already satisfied: propcache>=0.2.0 in .\venv\Lib\site-packages (from aiohttp) (0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in .\venv\Lib\site-packages (from aiohttp) (1.23.0)
+Requirement already satisfied: idna>=2.0 in .\venv\Lib\site-packages (from yarl<2.0,>=1.17.0->aiohttp) (3.11)
+Python virtual environment setup complete
+
+========================================
+Running IPTV Collection
+========================================
+[5/5] Checking script files and config...
+[*] iptv.py script found
+[*] IPTV config directory found
+
+Starting IPTV stream collection...
+========================================
+
+Loaded 6443 online geo tokens from: https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json
+Online geo classification tokens merged.
+Valid streams: 1160, deduplicated: 1008, best-per-channel: 635
+Generated sorted M3U file: best_sorted.m3u
+
+========================================
+IPTV Collection Complete
+========================================
+
+Generated M3U file: best_sorted.m3u
+   File size: 133953 bytes
+Generated M3U8 file: best_sorted.m3u8
+   File size: 133953 bytes
+
+Tips:
+   - Use M3U-compatible players to open generated files
+   - Recommended: PotPlayer, VLC, Kodi, etc.
+   - Run with --collect to run IPTV collection only
+
+Press any key to continue . . . 
+Terminate batch job (Y/N)? 

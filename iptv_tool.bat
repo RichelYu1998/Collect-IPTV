@@ -400,6 +400,6 @@ echo.
 
 call %VENV_PATH%\Scripts\activate.bat
 cd /d "%~dp0"
-%PYTHON_CMD% server.py 8000
+%PYTHON_CMD% "%~dp0server.py" 8000
 pause
 exit /b 0
