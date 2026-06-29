@@ -44,3 +44,6 @@ best_sorted.*
 
 # Logs
 *.log
+
+# Temp test files
+bat_*.txt
