@@ -33,6 +33,8 @@ FFMPEG_PATH = None
 TRANSCODE_DIR = None
 transcode_sessions = {}
 transcode_lock = threading.Lock()
+audio_probe_cache = {}
+audio_probe_lock = threading.Lock()
 
 M3U8_CONTENT_TYPES = (
     'application/vnd.apple.mpegurl',
@@ -129,6 +131,36 @@ def probe_audio_info(url):
         return {'has_audio': None, 'error': 'parse_error'}
     except Exception as e:
         return {'has_audio': None, 'error': str(e)}
+
+
+def probe_audio_cached(url):
+    with audio_probe_lock:
+        cached = audio_probe_cache.get(url)
+        if cached is not None:
+            age = time.time() - cached['time']
+            if age < 300:
+                return cached['result']
+
+    result = probe_audio_info(url)
+
+    with audio_probe_lock:
+        audio_probe_cache[url] = {'time': time.time(), 'result': result}
+
+        if len(audio_probe_cache) > 500:
+            sorted_items = sorted(audio_probe_cache.items(), key=lambda x: x[1]['time'])
+            for k, _ in sorted_items[:200]:
+                del audio_probe_cache[k]
+
+    return result
+
+
+def needs_transcode(url):
+    if not FFMPEG_PATH:
+        return False
+    info = probe_audio_cached(url)
+    if info.get('has_audio') and info.get('unsupported'):
+        return True
+    return False
 
 
 def start_transcode_session(url):
@@ -328,6 +360,16 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                 is_m3u8 = any(ct in content_type for ct in M3U8_CONTENT_TYPES)
                 if not is_m3u8:
                     is_m3u8 = target_url.endswith('.m3u8') or target_url.endswith('.m3u')
+
+                if is_m3u8 and needs_transcode(target_url):
+                    session_id = start_transcode_session(target_url)
+                    tstream_url = f'/tstream/{session_id}/index.m3u8'
+                    self.send_response(302)
+                    self.send_header('Location', tstream_url)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.end_headers()
+                    return
 
                 if is_m3u8:
                     try:
