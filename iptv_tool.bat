@@ -194,7 +194,7 @@ set "MIN_CDN_TIME=9999"
 set "BEST_CDN_URL="
 set "BEST_CDN_NAME="
 
-for /L %%i in (0,1,2) do (
+for /L %%i in (0,1,4) do (
     for /f "tokens=1,2 delims=|" %%a in ("!FFMPEG_CDNS[%%i]!") do (
         set "CDN_URL=%%a"
         set "CDN_NAME=%%b"
@@ -234,7 +234,7 @@ set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
 set "FFMPEG_URL=!BEST_CDN_URL!"
 
 echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
-curl -L -o "%FFMPEG_ZIP%" "%FFMPEG_URL%" --connect-timeout 15 --max-time 300 -#
+curl -L -o "%FFMPEG_ZIP%" "%FFMPEG_URL%" --connect-timeout 15 --max-time 300 -# --retry 3 --retry-delay 5
 
 if not exist "%FFMPEG_ZIP%" (
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
@@ -242,16 +242,32 @@ if not exist "%FFMPEG_ZIP%" (
     exit /b 0
 )
 
+for %%A in ("%FFMPEG_ZIP%") do set FFMPEG_SIZE=%%~zA
+if !FFMPEG_SIZE! LSS 10000000 (
+    echo [WARNING] Downloaded file too small (!FFMPEG_SIZE! bytes), download may be incomplete
+    del "%FFMPEG_ZIP%" 2>nul
+    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+    exit /b 0
+)
+
 echo [3/3] Extracting FFmpeg to .venv...
 if exist "%TEMP%\ffmpeg_extract" rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
 
-%PYTHON_CMD% -c "import zipfile; z=zipfile.ZipFile(r'%FFMPEG_ZIP%'); z.extractall(r'%TEMP%\ffmpeg_extract'); z.close()" 2>nul
+%PYTHON_CMD% -c "import zipfile; z=zipfile.ZipFile(r'%FFMPEG_ZIP%'); z.extractall(r'%TEMP%\ffmpeg_extract'); z.close()"
 if errorlevel 1 (
-    powershell -Command "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath '%TEMP%\ffmpeg_extract' -Force" 2>nul
+    echo     Python extraction failed, trying PowerShell...
+    powershell -Command "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath '%TEMP%\ffmpeg_extract' -Force"
+    if errorlevel 1 (
+        echo [WARNING] FFmpeg extraction failed
+        del "%FFMPEG_ZIP%" 2>nul
+        exit /b 0
+    )
 )
 
-for /d %%d in ("%TEMP%\ffmpeg_extract\ffmpeg*") do (
+set "FFMPEG_FOUND="
+for /d %%d in ("%TEMP%\ffmpeg_extract\*") do (
     if exist "%%d\bin\ffmpeg.exe" (
+        set "FFMPEG_FOUND=%%d"
         if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
         move "%%d" "%FFMPEG_DIR%" >nul 2>&1
         if not exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
@@ -262,6 +278,13 @@ for /d %%d in ("%TEMP%\ffmpeg_extract\ffmpeg*") do (
 
 rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
 del "%FFMPEG_ZIP%" 2>nul
+
+if not defined FFMPEG_FOUND (
+    echo [WARNING] FFmpeg binary not found in extracted archive
+    dir "%TEMP%\ffmpeg_extract" 2>nul
+    if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
+    exit /b 0
+)
 
 if exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
     set "PATH=%FFMPEG_DIR%\bin;%PATH%"
