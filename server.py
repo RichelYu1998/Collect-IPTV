@@ -303,6 +303,11 @@ def find_ffmpeg():
     if path:
         return path
     base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    project_ffmpeg = os.path.join(base_dir, 'ffmpeg', 'bin', f'ffmpeg{".exe" if os.name == "nt" else ""}')
+    if os.path.isfile(project_ffmpeg):
+        return project_ffmpeg
+
     if os.name == 'nt':
         venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', 'ffmpeg.exe')
         if os.path.isfile(venv_ffmpeg):
