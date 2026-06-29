@@ -53,5 +53,5 @@ ffmpeg/
 # CDN cache
 .cdn_cache.json
 
-# Stream test result cache
-.stream_cache.json
+# Stream test result cache (in file/ directory)
+file/.stream_cache.json

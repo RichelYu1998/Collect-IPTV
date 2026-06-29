@@ -23,6 +23,66 @@
         #playerOverlay.hidden #playerWrapper { transform: scale(0.95); }
         #playerOverlay.visible #playerWrapper { transform: scale(1); }
         #videoPlayer:fullscreen, #videoPlayer:-webkit-full-screen { width: 100%; height: 100%; background: #000; }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body { font-size: 14px; }
+            h1 { font-size: 1.5rem !important; }
+            .container { padding-left: 12px !important; padding-right: 12px !important; }
+
+            /* 表格响应式 */
+            table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            thead, tbody, tr, th, td { display: block; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr { border: 1px solid #e5e7eb; margin-bottom: 8px; border-radius: 8px; padding: 12px; background: #fff; }
+            td { text-align: left !important; padding: 6px 10px !important; border: none !important; position: relative; padding-left: 45% !important; white-space: normal !important; }
+            td::before { content: attr(data-label); position: absolute; left: 10px; width: 40%; padding-right: 10px; white-space: nowrap; font-weight: 600; color: #6b7280; font-size: 13px; }
+
+            /* 隐藏 ID 列和 Logo 列在移动端 */
+            td:nth-of-type(1), td:nth-of-type(2) { display: none; }
+
+            /* 操作按钮优化 */
+            .flex.gap-2 button { padding: 8px 12px !important; font-size: 13px !important; flex: 1; justify-content: center; }
+
+            /* 搜索框全宽 */
+            #searchInput { min-width: 0 !important; }
+            select { font-size: 14px !important; }
+
+            /* 信息栏换行 */
+            .text-sm.text-gray-600 > div { margin-bottom: 4px; }
+            a.ml-auto { margin-left: 0 !important; margin-top: 8px; display: inline-block; }
+
+            /* 播放器适配 */
+            #playerWrapper { max-width: 100% !important; margin: 8px; border-radius: 12px; }
+            #playerWrapper .flex.items-center.justify-between { flex-wrap: wrap; gap: 8px; }
+            #playerWrapper .flex.items-center.gap-2 { order: 3; width: 100%; justify-content: center; }
+            #volumeSlider { width: 120px !important; }
+            video { aspect-ratio: 16/9; object-fit: contain; }
+
+            /* 按钮触控优化 */
+            button { min-height: 44px; -webkit-tap-highlight-color: transparent; }
+            .copy-btn { min-height: 36px; }
+
+            /* Footer */
+            footer { font-size: 12px; padding: 16px 0 !important; }
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.25rem !important; }
+            p { font-size: 13px; }
+            select { padding: 8px !important; }
+            td::before { font-size: 12px; }
+            td { font-size: 13px !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+            #playerWrapper { margin: 4px; border-radius: 8px; }
+            .fa-play-circle { font-size: 48px !important; }
+        }
+
+        /* 平板适配 */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .container { max-width: 95% !important; }
+            table th:nth-of-type(1), table td:nth-of-type(1) { width: 50px !important; }
+            table th:nth-of-type(2), table td:nth-of-type(2) { width: 70px !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -97,7 +157,7 @@
 
         <div id="channelTable" class="bg-white rounded-lg shadow-sm overflow-hidden fade-in hidden">
             <div class="overflow-x-auto">
-                <table class="min-w-full">
+                <table class="min-w-full" id="channelTableElement">
                     <thead class="bg-gray-100">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-16">#ID</th>
@@ -231,14 +291,17 @@
 
                 const idCell = document.createElement('td');
                 idCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                idCell.setAttribute('data-label', '#ID');
                 idCell.textContent = String(index + 1);
 
                 const logoCell = document.createElement('td');
                 logoCell.className = 'px-6 py-4 whitespace-nowrap';
+                logoCell.setAttribute('data-label', '台标');
                 logoCell.innerHTML = getLogoHtml(channel);
 
                 const nameCell = document.createElement('td');
                 nameCell.className = 'px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors';
+                nameCell.setAttribute('data-label', '频道名称');
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'block max-w-[18rem] md:max-w-[30rem] truncate';
                 nameSpan.title = channel.name || '未知频道';
@@ -250,6 +313,7 @@
 
                 const categoryCell = document.createElement('td');
                 categoryCell.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                categoryCell.setAttribute('data-label', '分类');
                 const categorySpan = document.createElement('span');
                 categorySpan.className = 'text-purple-600';
                 categorySpan.textContent = channel.category || '未分类';
@@ -257,6 +321,7 @@
 
                 const actionCell = document.createElement('td');
                 actionCell.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                actionCell.setAttribute('data-label', '操作');
                 const btnGroup = document.createElement('div');
                 btnGroup.className = 'flex items-center gap-2';
 

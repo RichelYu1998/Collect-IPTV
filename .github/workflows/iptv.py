@@ -22,7 +22,8 @@ logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FFMPEG_DIR = PROJECT_ROOT / 'ffmpeg'
-STREAM_CACHE_FILE = PROJECT_ROOT / '.stream_cache.json'
+FILE_DIR = PROJECT_ROOT / 'file'
+STREAM_CACHE_FILE = FILE_DIR / '.stream_cache.json'
 STREAM_CACHE_TTL = 4 * 3600  # 流测试缓存有效期：4小时
 
 
@@ -1146,9 +1147,10 @@ def load_stream_cache():
 def save_stream_cache(cache_data):
     """保存流测试结果缓存"""
     try:
+        FILE_DIR.mkdir(parents=True, exist_ok=True)
         with open(STREAM_CACHE_FILE, 'w', encoding='utf-8') as f:
             json.dump(cache_data, f)
-        print(f"Saved stream cache: {len(cache_data)} entries to {STREAM_CACHE_FILE.name}")
+        print(f"Saved stream cache: {len(cache_data)} entries to file/{STREAM_CACHE_FILE.name}")
     except Exception as e:
         print(f"Failed to save stream cache: {e}")
 
