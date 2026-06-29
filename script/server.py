@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import platform
 import socket
 import subprocess
 import hashlib
@@ -8,12 +9,15 @@ import time
 import tempfile
 import shutil
 import json
+import tarfile
+import zipfile
 import atexit
 import urllib.parse
 import urllib.request
 import http.server
 import functools
 import threading
+from pathlib import Path
 
 PORT = int(os.environ.get('IPTV_SERVER_PORT', '8000'))
 PROXY_PREFIX = '/proxy/'
@@ -36,12 +40,262 @@ transcode_lock = threading.Lock()
 audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
 
+PROJECT_ROOT = Path(__file__).parent.parent
+FFMPEG_INSTALL_DIR = PROJECT_ROOT / 'ffmpeg'
+
 M3U8_CONTENT_TYPES = (
     'application/vnd.apple.mpegurl',
     'application/x-mpegurl',
     'audio/mpegurl',
     'audio/x-mpegurl',
 )
+
+
+def detect_os():
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == 'windows':
+        if machine in ['amd64', 'x86_64']:
+            return {'os': 'windows', 'arch': 'win64', 'ext': '.exe'}
+        elif machine in ['arm64', 'aarch64']:
+            return {'os': 'windows', 'arch': 'winarm64', 'ext': '.exe'}
+        else:
+            return {'os': 'windows', 'arch': 'win32', 'ext': '.exe'}
+    elif system == 'darwin':
+        if machine in ['arm64', 'aarch64']:
+            return {'os': 'mac', 'arch': 'mac_arm64', 'ext': ''}
+        else:
+            return {'os': 'mac', 'arch': 'mac_x64', 'ext': ''}
+    elif system == 'linux':
+        if machine in ['arm64', 'aarch64']:
+            return {'os': 'linux', 'arch': 'linux_arm64', 'ext': ''}
+        elif machine in ['x86_64', 'amd64']:
+            return {'os': 'linux', 'arch': 'linux_x64', 'ext': ''}
+        else:
+            return {'os': 'linux', 'arch': 'linux_32', 'ext': ''}
+    else:
+        raise Exception(f"Unsupported OS: {system}")
+
+
+def check_ffmpeg_installed():
+    os_info = detect_os()
+    ffmpeg_path = FFMPEG_INSTALL_DIR / 'bin' / f'ffmpeg{os_info["ext"]}'
+    if ffmpeg_path.exists():
+        try:
+            result = subprocess.run(
+                [str(ffmpeg_path), '-version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                version = result.stdout.split('\n')[0]
+                print(f"[*] FFmpeg already installed: {version}")
+                print(f"    Location: {ffmpeg_path}")
+                return True
+        except:
+            pass
+    return False
+
+
+def download_file(url, dest_path):
+    print(f"    Downloading: {url}")
+    try:
+        urllib.request.urlretrieve(url, str(dest_path))
+        file_size = os.path.getsize(dest_path)
+        print(f"    Downloaded: {file_size / 1024 / 1024:.1f} MB")
+        return True
+    except Exception as e:
+        print(f"    Download failed: {e}")
+        return False
+
+
+def extract_zip_generic(filepath, dest):
+    try:
+        with zipfile.ZipFile(str(filepath), 'r') as zip_ref:
+            zip_ref.extractall(str(dest))
+        for root, dirs, files in os.walk(str(dest)):
+            for f in files:
+                if f == 'ffmpeg.exe' or f == 'ffmpeg':
+                    return os.path.join(root, f)
+        return None
+    except Exception as e:
+        print(f"    Extraction failed: {e}")
+        return None
+
+
+def extract_zip_windows(filepath, dest):
+    return extract_zip_generic(filepath, dest)
+
+
+def extract_zip_mac(filepath, dest):
+    try:
+        with zipfile.ZipFile(str(filepath), 'r') as zip_ref:
+            zip_ref.extractall(str(dest))
+        ffmpeg_bin = dest / 'ffmpeg'
+        if ffmpeg_bin.exists():
+            return str(ffmpeg_bin)
+        return None
+    except Exception as e:
+        print(f"    Extraction failed: {e}")
+        return None
+
+
+def install_via_package_manager(cmd, name):
+    print(f"    Installing via {name}...")
+    try:
+        full_cmd = ' '.join(cmd) if isinstance(cmd, list) else cmd
+        result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=300)
+        if result.returncode == 0:
+            print(f"    Installation successful!")
+            return True
+        else:
+            print(f"    Installation failed: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        print("    Installation timeout (5 minutes)")
+        return False
+    except Exception as e:
+        print(f"    Error: {e}")
+        return False
+
+
+def setup_ffmpeg():
+    print("=" * 60)
+    print("FFmpeg Setup Tool")
+    print("=" * 60)
+
+    os_info = detect_os()
+    print(f"\n[*] Detected OS: {os_info['os'].upper()} ({os_info['arch']})")
+
+    if check_ffmpeg_installed():
+        print("\nFFmpeg is ready to use!")
+        return True
+
+    print(f"\n[*] FFmpeg will be installed to: {FFMPEG_INSTALL_DIR}")
+
+    sources = []
+
+    if os_info['os'] == 'windows':
+        sources = [
+            {
+                'name': 'Gyan.dev (Official)',
+                'url': 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+                'extract_func': extract_zip_windows
+            },
+            {
+                'name': 'BtbN (GitHub)',
+                'url': f'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{os_info["arch"]}-gpl.zip',
+                'extract_func': extract_zip_generic
+            }
+        ]
+    elif os_info['os'] == 'mac':
+        sources = [
+            {
+                'name': 'evermeet.cx',
+                'url': 'https://evermeet.cx/ffmpeg/getrelease/zip',
+                'extract_func': extract_zip_mac
+            },
+            {
+                'name': 'Homebrew',
+                'url': None,
+                'install_cmd': ['brew', 'install', 'ffmpeg']
+            }
+        ]
+    elif os_info['os'] == 'linux':
+        if shutil.which('apt-get'):
+            sources.append({
+                'name': 'APT (Ubuntu/Debian)',
+                'url': None,
+                'install_cmd': ['sudo', 'apt-get', 'update', '&&', 'sudo', 'apt-get', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('dnf'):
+            sources.append({
+                'name': 'DNF (Fedora)',
+                'url': None,
+                'install_cmd': ['sudo', 'dnf', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('yum'):
+            sources.append({
+                'name': 'YUM (CentOS/RHEL)',
+                'url': None,
+                'install_cmd': ['sudo', 'yum', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('pacman'):
+            sources.append({
+                'name': 'Pacman (Arch)',
+                'url': None,
+                'install_cmd': ['sudo', 'pacman', '-S', '--noconfirm', 'ffmpeg']
+            })
+
+    success = False
+
+    for i, source in enumerate(sources, 1):
+        print(f"\n{'='*60}")
+        print(f"[{i}/{len(sources)}] Trying: {source['name']}")
+        print('=' * 60)
+
+        if source.get('install_cmd'):
+            if install_via_package_manager(source['install_cmd'], source['name']):
+                success = True
+                break
+            continue
+
+        if not source.get('url'):
+            continue
+
+        temp_download = PROJECT_ROOT / '_temp_ffmpeg.zip'
+        temp_extract = PROJECT_ROOT / '_temp_ffmpeg_extract'
+
+        if os.path.exists(temp_extract):
+            shutil.rmtree(temp_extract, ignore_errors=True)
+
+        if download_file(source['url'], temp_download):
+            extract_func = source.get('extract_func')
+            if extract_func and callable(extract_func):
+                try:
+                    result = extract_func(temp_download, temp_extract)
+                    if result:
+                        if os_info['os'] != 'mac':
+                            src = Path(result)
+                            dst = FFMPEG_INSTALL_DIR
+                            if dst.exists():
+                                shutil.rmtree(dst)
+                            shutil.move(src, dst)
+                        success = True
+                        break
+                except Exception as e:
+                    print(f"  ✗ Extraction failed: {e}")
+
+        if temp_download.exists():
+            os.remove(temp_download)
+
+    if os.path.exists(PROJECT_ROOT / '_temp_ffmpeg_extract'):
+        shutil.rmtree(PROJECT_ROOT / '_temp_ffmpeg_extract', ignore_errors=True)
+
+    if success:
+        print("\n" + "=" * 60)
+        print("[*] FFmpeg installation completed successfully!")
+        print("=" * 60)
+        return check_ffmpeg_installed()
+    else:
+        print("\n" + "=" * 60)
+        print("[!] All installation methods failed")
+        print("=" * 60)
+        print("\nManual installation options:")
+        if os_info['os'] == 'windows':
+            print("  1. Download from https://www.gyan.dev/ffmpeg/builds/")
+            print(f"  2. Extract to: {FFMPEG_INSTALL_DIR}")
+        elif os_info['os'] == 'mac':
+            print("  1. Install Homebrew: https://brew.sh/")
+            print("  2. Run: brew install ffmpeg")
+        elif os_info['os'] == 'linux':
+            print("  1. Use your package manager:")
+            print("     Ubuntu/Debian: sudo apt install ffmpeg")
+            print("     Fedora: sudo dnf install ffmpeg")
+            print("     Arch: sudo pacman -S ffmpeg")
+        return False
 
 
 def find_ffmpeg():
@@ -574,9 +828,8 @@ def main():
     TRANSCODE_DIR = tempfile.mkdtemp(prefix='iptv_tc_')
     atexit.register(cleanup_all_transcodes)
 
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    serve_dir = os.path.join(base_dir, '.github', 'workflows')
+    port = int(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else PORT
+    serve_dir = str(PROJECT_ROOT / '.github' / 'workflows')
     handler = functools.partial(CORSProxyHandler, directory=serve_dir)
 
     with ThreadedHTTPServer(('', port), handler) as httpd:
@@ -599,4 +852,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == '--setup-ffmpeg':
+        success = setup_ffmpeg()
+        sys.exit(0 if success else 1)
+    else:
+        main()

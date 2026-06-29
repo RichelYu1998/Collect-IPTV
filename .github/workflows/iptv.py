@@ -5,12 +5,23 @@ import asyncio
 import ssl
 import time
 import json
+import platform
+import subprocess
+import shutil
+import urllib.request
+import tarfile
+import zipfile
+from pathlib import Path
+from datetime import datetime
 from collections import defaultdict
 import re
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Any
 
 logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+FFMPEG_DIR = PROJECT_ROOT / 'ffmpeg'
 
 
 def _suppress_asyncio_exception(loop, context):
@@ -44,8 +55,314 @@ CONFIG = {
     "output_file": os.environ.get("IPTV_OUTPUT_FILE", "best_sorted.m3u"),
     "connect_timeout": int(os.environ.get("IPTV_CONNECT_TIMEOUT", "3")),
     "dns_cache_ttl": int(os.environ.get("IPTV_DNS_CACHE_TTL", "300")),
-    "source_cdn_test_timeout": int(os.environ.get("IPTV_SOURCE_CDN_TIMEOUT", "5")),
+    "source_cdn_test_timeout": int(os.environ.get("IPTV_SOURCE_CDN_TIMEOUT", "3")),
+    "cdn_cache_ttl_hours": int(os.environ.get("IPTV_CDN_CACHE_TTL", "6")),
 }
+
+CDN_CACHE_FILE = os.path.join(os.path.dirname(__file__) or ".", ".cdn_cache.json")
+
+def detect_os():
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+
+    if system == 'windows':
+        if machine in ['amd64', 'x86_64']:
+            return {'os': 'windows', 'arch': 'win64', 'ext': '.exe'}
+        elif machine in ['arm64', 'aarch64']:
+            return {'os': 'windows', 'arch': 'winarm64', 'ext': '.exe'}
+        else:
+            return {'os': 'windows', 'arch': 'win32', 'ext': '.exe'}
+    elif system == 'darwin':
+        if machine in ['arm64', 'aarch64']:
+            return {'os': 'mac', 'arch': 'mac_arm64', 'ext': ''}
+        else:
+            return {'os': 'mac', 'arch': 'mac_x64', 'ext': ''}
+    elif system == 'linux':
+        if machine in ['arm64', 'aarch64']:
+            return {'os': 'linux', 'arch': 'linux_arm64', 'ext': ''}
+        elif machine in ['x86_64', 'amd64']:
+            return {'os': 'linux', 'arch': 'linux_x64', 'ext': ''}
+        else:
+            return {'os': 'linux', 'arch': 'linux_32', 'ext': ''}
+    else:
+        raise Exception(f"Unsupported OS: {system}")
+
+def check_ffmpeg_installed():
+    ffmpeg_path = FFMPEG_DIR / 'bin' / f'ffmpeg{detect_os()["ext"]}'
+    if ffmpeg_path.exists():
+        try:
+            result = subprocess.run(
+                [str(ffmpeg_path), '-version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                version = result.stdout.split('\n')[0]
+                print(f"✓ FFmpeg already installed: {version}")
+                print(f"  Location: {ffmpeg_path}")
+                return True
+        except:
+            pass
+    return False
+
+def get_ffmpeg_sources(os_info):
+    sources = []
+    if os_info['os'] == 'windows':
+        sources = [
+            {
+                'name': 'Gyan.dev (Official)',
+                'url': 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+                'extract_func': extract_zip_generic
+            },
+            {
+                'name': 'BtbN (GitHub)',
+                'url': f'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{os_info["arch"]}-gpl.zip',
+                'extract_func': extract_zip_generic
+            }
+        ]
+    elif os_info['os'] == 'mac':
+        sources = [
+            {
+                'name': 'evermeet.cx (Homebrew)',
+                'url': 'https://evermeet.cx/ffmpeg/getrelease/zip',
+                'extract_func': extract_zip_mac
+            },
+            {
+                'name': 'Homebrew (Package Manager)',
+                'url': None,
+                'install_cmd': ['brew', 'install', 'ffmpeg']
+            }
+        ]
+    elif os_info['os'] == 'linux':
+        package_managers = []
+
+        if shutil.which('apt-get'):
+            package_managers.append({
+                'name': 'APT (Ubuntu/Debian)',
+                'cmd': ['sudo', 'apt-get', 'update'] + ['&&'] + ['sudo', 'apt-get', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('dnf'):
+            package_managers.append({
+                'name': 'DNF (Fedora)',
+                'cmd': ['sudo', 'dnf', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('yum'):
+            package_managers.append({
+                'name': 'YUM (CentOS/RHEL)',
+                'cmd': ['sudo', 'yum', 'install', '-y', 'ffmpeg']
+            })
+        elif shutil.which('pacman'):
+            package_managers.append({
+                'name': 'Pacman (Arch Linux)',
+                'cmd': ['sudo', '-S', 'pacman', '-S', '--noconfirm', 'ffmpeg']
+            })
+        elif shutil.which('zypper'):
+            package_managers.append({
+                'name': 'Zypper (openSUSE)',
+                'cmd': ['sudo', 'zypper', 'install', '-y', 'ffmpeg']
+            })
+
+        for pm in package_managers:
+            sources.append({
+                'name': pm['name'],
+                'url': None,
+                'install_cmd': pm['cmd']
+            })
+
+        sources.append({
+            'name': 'Static Build (johnvansickle.com)',
+            'url': 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz',
+            'extract_func': extract_tar_xz_linux
+        })
+
+    return sources
+
+def extract_zip_generic(filepath, dest):
+    with zipfile.ZipFile(filepath, 'r') as z:
+        z.extractall(dest)
+    return find_ffmpeg_in_dir(dest)
+
+def extract_zip_mac(filepath, dest):
+    temp_dir = dest / '_temp'
+    temp_dir.mkdir(exist_ok=True)
+
+    with zipfile.ZipFile(filepath, 'r') as z:
+        z.extractall(temp_dir)
+
+    ffmpeg_bin = FFMPEG_DIR / 'bin'
+    ffmpeg_bin.mkdir(parents=True, exist_ok=True)
+
+    for item in temp_dir.iterdir():
+        if item.is_file() and item.suffix == '':
+            target = ffmpeg_bin / item.name
+            shutil.copy2(item, target)
+            os.chmod(target, 0o755)
+
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+    if (ffmpeg_bin / 'ffmpeg').exists():
+        return str(FFMPEG_DIR)
+    return None
+
+def extract_tar_xz_linux(filepath, dest):
+    with tarfile.open(filepath, 'r:xz') as tar:
+        tar.extractall(dest)
+    return find_ffmpeg_in_dir(dest)
+
+def find_ffmpeg_in_dir(directory):
+    for root, dirs, files in os.walk(directory):
+        if 'ffmpeg' in files or 'ffmpeg.exe' in files:
+            ffmpeg_path = Path(root) / ('ffmpeg.exe' if 'ffmpeg.exe' in files else 'ffmpeg')
+            if ffmpeg_path.exists() and not ffmpeg_path.is_dir():
+                return str(Path(root).parent) if len(Path(root).parts) > 1 else str(root)
+    return None
+
+def download_file(url, dest_path):
+    print(f"  Downloading from: {url}")
+
+    try:
+        urllib.request.urlretrieve(url, dest_path)
+        size_mb = os.path.getsize(dest_path) / (1024 * 1024)
+        print(f"  ✓ Downloaded: {size_mb:.1f} MB")
+        return True
+    except Exception as e:
+        print(f"  ✗ Download failed: {e}")
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        return False
+
+def install_via_package_manager(cmd, name):
+    print(f"\n[*] Installing via {name}...")
+    print(f"  Command: {' '.join(str(c) for c in cmd)}")
+
+    try:
+        if isinstance(cmd[0], list):
+            for c in cmd:
+                subprocess.run(c, check=True)
+        else:
+            subprocess.run(cmd, check=True)
+
+        ffmpeg_path = shutil.which('ffmpeg')
+        if ffmpeg_path:
+            create_symlink_or_copy(ffmpeg_path)
+            return True
+    except subprocess.CalledProcessError as e:
+        print(f"  ✗ Installation failed: {e}")
+        return False
+
+    return False
+
+def create_symlink_or_copy(system_ffmpeg):
+    try:
+        FFMPEG_DIR.mkdir(parents=True, exist_ok=True)
+        bin_dir = FFMPEG_DIR / 'bin'
+        bin_dir.mkdir(exist_ok=True)
+
+        local_ffmpeg = bin_dir / 'ffmpeg'
+
+        if local_ffmpeg.exists() or local_ffmpeg.is_symlink():
+            local_ffmpeg.unlink()
+
+        os.symlink(system_ffmpeg, local_ffmpeg)
+        print(f"✓ Created symlink: {local_ffmpeg} -> {system_ffmpeg}")
+
+        ffprobe = Path(system_ffmpeg).parent / 'ffprobe'
+        local_ffprobe = bin_dir / 'ffprobe'
+        if ffprobe.exists():
+            os.symlink(str(ffprobe), local_ffprobe)
+            print(f"✓ Created symlink: {local_ffprobe} -> {ffprobe}")
+
+        return True
+    except OSError:
+        shutil.copy2(system_ffmpeg, str(local_ffmpeg))
+        print(f"✓ Copied to: {local_ffmpeg}")
+        return True
+
+def setup_ffmpeg():
+    print("=" * 60)
+    print("FFmpeg Setup Tool")
+    print("=" * 60)
+
+    os_info = detect_os()
+    print(f"\n[*] Detected OS: {os_info['os'].upper()} ({os_info['arch']})")
+
+    if check_ffmpeg_installed():
+        print("\nFFmpeg is ready to use!")
+        return True
+
+    print(f"\n[*] FFmpeg will be installed to: {FFMPEG_DIR}")
+
+    sources = get_ffmpeg_sources(os_info)
+    success = False
+
+    for i, source in enumerate(sources, 1):
+        print(f"\n{'='*60}")
+        print(f"[{i}/{len(sources)}] Trying: {source['name']}")
+        print('=' * 60)
+
+        if source.get('install_cmd'):
+            if install_via_package_manager(source['install_cmd'], source['name']):
+                success = True
+                break
+            continue
+
+        if not source.get('url'):
+            continue
+
+        temp_download = PROJECT_ROOT / '_temp_ffmpeg.zip'
+        temp_extract = PROJECT_ROOT / '_temp_ffmpeg_extract'
+
+        if os.path.exists(temp_extract):
+            shutil.rmtree(temp_extract, ignore_errors=True)
+
+        if download_file(source['url'], temp_download):
+            extract_func = source.get('extract_func')
+            if extract_func and callable(extract_func):
+                try:
+                    result = extract_func(temp_download, temp_extract)
+                    if result:
+                        if os_info['os'] != 'mac':
+                            src = Path(result)
+                            dst = FFMPEG_DIR
+                            if dst.exists():
+                                shutil.rmtree(dst)
+                            shutil.move(src, dst)
+                        success = True
+                        break
+                except Exception as e:
+                    print(f"  ✗ Extraction failed: {e}")
+
+        if temp_download.exists():
+            os.remove(temp_download)
+
+    if os.path.exists(PROJECT_ROOT / '_temp_ffmpeg_extract'):
+        shutil.rmtree(PROJECT_ROOT / '_temp_ffmpeg_extract', ignore_errors=True)
+
+    if success:
+        print("\n" + "=" * 60)
+        print("✓ FFmpeg installation completed successfully!")
+        print("=" * 60)
+
+        if check_ffmpeg_installed():
+            return True
+    else:
+        print("\n" + "=" * 60)
+        print("✗ All FFmpeg installation methods failed")
+        print("=" * 60)
+        print("\nManual installation options:")
+        if os_info['os'] == 'windows':
+            print("  1. Download from https://www.gyan.dev/ffmpeg/builds/")
+            print("  2. Extract to:", FFMPEG_DIR)
+        elif os_info['os'] == 'mac':
+            print("  1. Install Homebrew: https://brew.sh/")
+            print("  2. Run: brew install ffmpeg")
+        elif os_info['os'] == 'linux':
+            print("  1. Use your package manager:")
+            print("     Ubuntu/Debian: sudo apt install ffmpeg")
+            print("     Fedora: sudo dnf install ffmpeg")
+            print("     Arch: sudo pacman -S ffmpeg")
+        return False
 
 CHAR_NORMALIZATION_MAP = str.maketrans({
     "頻": "频",
@@ -213,6 +530,29 @@ SCENIC_EXCLUDE_HINTS = {
     "动漫", "少儿", "音乐", "广播", "经济", "生活", "教育", "科教", "资讯",
     "法治", "军事", "购物", "党建", "游戏", "电竞"
 }
+
+def load_cdn_cache():
+    try:
+        if os.path.exists(CDN_CACHE_FILE):
+            with open(CDN_CACHE_FILE, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+                cache_time = datetime.fromisoformat(cache.get('timestamp', '2000-01-01'))
+                if (datetime.now() - cache_time).total_seconds() < CONFIG['cdn_cache_ttl_hours'] * 3600:
+                    return cache.get('results', {})
+    except Exception:
+        pass
+    return {}
+
+def save_cdn_cache(results):
+    try:
+        cache = {
+            'timestamp': datetime.now().isoformat(),
+            'results': results
+        }
+        with open(CDN_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, indent=2)
+    except Exception:
+        pass
 
 # 【修改点 1】去掉 pcas-code 里的 s（街道/乡镇），只使用省、市、区级别的 pca-code.json
 ONLINE_GEO_DATA_URLS = [
@@ -475,8 +815,28 @@ async def load_online_geo_tokens(
     session: aiohttp.ClientSession,
     province_channels: Dict[str, Set[str]]
 ) -> Dict[str, Set[str]]:
-    cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
-    print("Testing geo data CDN sources...")
+    cdn_cache = load_cdn_cache()
+    cache_key = 'geo_data'
+
+    if cache_key in cdn_cache:
+        cached_url = cdn_cache[cache_key].get('url')
+        if cached_url:
+            print(f"Using cached fastest geo CDN: {cached_url}")
+            try:
+                async with session.get(cached_url, timeout=CONFIG["timeout"]) as response:
+                    if response.status == 200:
+                        raw_text = await response.text(errors="ignore")
+                        payload = json.loads(raw_text)
+                        tokens = collect_online_geo_tokens(payload, province_channels)
+                        if tokens:
+                            total = sum(len(items) for items in tokens.values())
+                            print(f"Loaded {total} online geo tokens from cache: {cached_url}")
+                        return tokens
+            except Exception:
+                pass
+
+    cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=1.5)
+    print("Testing geo data CDN sources (parallel)...")
 
     async def _test_geo_cdn(url):
         try:
@@ -488,7 +848,8 @@ async def load_online_geo_tokens(
         except Exception:
             return url, None
 
-    results = await asyncio.gather(*[_test_geo_cdn(url) for url in ONLINE_GEO_DATA_URLS])
+    tasks = [_test_geo_cdn(url) for url in ONLINE_GEO_DATA_URLS]
+    results = await asyncio.gather(*tasks)
 
     best_url = None
     best_latency = float('inf')
@@ -504,7 +865,11 @@ async def load_online_geo_tokens(
     if not best_url:
         print("  All geo CDN sources failed, skipping online geo tokens.")
         return {}
+
     print(f"  Fastest: {best_url} ({best_latency:.3f}s)")
+
+    cdn_cache[cache_key] = {'url': best_url, 'latency': best_latency}
+    save_cdn_cache(cdn_cache)
     try:
         async with session.get(best_url, timeout=CONFIG["timeout"]) as response:
             if response.status != 200:
@@ -948,49 +1313,79 @@ def load_province_channels(files):
 
 
 async def _select_fastest_source_cdns(source_groups):
-    """对每个 IPTV 源的多个 CDN 镜像并行测速，选最快的 URL。"""
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
-    connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=CONFIG["dns_cache_ttl"],
-                                     ssl=ssl_context, force_close=True, enable_cleanup_closed=True)
+    """对每个 IPTV 源的多个 CDN 镜像并行测速，选最快的 URL（带缓存）。"""
+    cdn_cache = load_cdn_cache()
 
-    async def _test_one_cdn(session, url):
-        try:
-            start = time.time()
-            async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
-                if resp.status < 400:
-                    return url, time.time() - start
+    cached_results = {}
+    groups_to_test = []
+
+    for idx, group in enumerate(source_groups):
+        cache_key = f'source_{idx}'
+        if cache_key in cdn_cache and cdn_cache[cache_key].get('url') in group['urls']:
+            cached_results[idx] = cdn_cache[cache_key]
+            print(f"Using cached CDN: {group['name']} -> {cdn_cache[cache_key]['url']}")
+        else:
+            groups_to_test.append((idx, group))
+
+    if groups_to_test:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=1.5)
+        connector = aiohttp.TCPConnector(limit=30, ttl_dns_cache=CONFIG["dns_cache_ttl"],
+                                         ssl=ssl_context, force_close=True, enable_cleanup_closed=True)
+
+        async def _test_one_cdn(session, url):
+            try:
+                start = time.time()
+                async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
+                    if resp.status < 400:
+                        return url, time.time() - start
+                    return url, None
+            except Exception:
                 return url, None
-        except Exception:
-            return url, None
 
-    selected_urls = []
-    print("Testing IPTV source CDN mirrors...")
-    async with aiohttp.ClientSession(timeout=cdn_timeout, connector=connector) as session:
-        for group in source_groups:
-            name = group["name"]
-            tasks = [_test_one_cdn(session, url) for url in group["urls"]]
-            results = await asyncio.gather(*tasks)
+        all_tasks = []
+        task_to_group = []
+        print(f"Testing {len(groups_to_test)} IPTV source groups (fully parallel)...")
 
-            best_url = None
-            best_latency = float('inf')
-            for url, latency in results:
+        async with aiohttp.ClientSession(timeout=cdn_timeout, connector=connector) as session:
+            for idx, group in groups_to_test:
+                for url in group["urls"]:
+                    task = asyncio.create_task(_test_one_cdn(session, url))
+                    all_tasks.append(task)
+                    task_to_group.append((idx, group["name"], url))
+
+            results = await asyncio.gather(*all_tasks)
+
+            group_results = {}
+            for i, (url, latency) in enumerate(results):
+                gidx, name, original_url = task_to_group[i]
+                if gidx not in group_results:
+                    group_results[gidx] = {'name': name, 'urls': []}
                 if latency is not None:
                     print(f"  {name} | {url}: {latency:.3f}s")
-                    if latency < best_latency:
-                        best_latency = latency
-                        best_url = url
+                    group_results[gidx]['urls'].append((url, latency))
                 else:
                     print(f"  {name} | {url}: failed")
 
-            if best_url:
-                selected_urls.append(best_url)
-                print(f"  -> Selected: {best_url} ({best_latency:.3f}s)")
-            else:
-                selected_urls.append(group["urls"][-1])
-                print(f"  -> Fallback: {group['urls'][-1]}")
+            for gidx, data in group_results.items():
+                if data['urls']:
+                    best_url, best_latency = min(data['urls'], key=lambda x: x[1])
+                    cached_results[gidx] = {'url': best_url, 'latency': best_latency}
+                    print(f"  -> Selected: {best_url} ({best_latency:.3f}s)")
+                else:
+                    group = next(g for i, g in groups_to_test if i == gidx)
+                    fallback_url = group["urls"][-1]
+                    cached_results[gidx] = {'url': fallback_url, 'latency': float('inf')}
+                    print(f"  -> Fallback: {fallback_url}")
+
+        for cache_key, result in ((f'source_{k}', v) for k, v in cached_results.items() if k >= len(cached_results) - len(groups_to_test)):
+            pass
+
+        save_cdn_cache({**cdn_cache, **{f'source_{k}': v for k, v in cached_results.items()}})
+
+    selected_urls = [cached_results[i]['url'] for i in range(len(source_groups))]
     print(f"Selected {len(selected_urls)} source URLs via CDN speed test.")
     return selected_urls
 

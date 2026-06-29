@@ -168,142 +168,40 @@ echo ========================================
 
 where ffmpeg >nul 2>&1
 if not errorlevel 1 (
-    echo [*] FFmpeg already installed:
-    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
-    exit /b 0
+    echo [*] FFmpeg already installed ^(system^):
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
 )
 
-set "FFMPEG_DIR=%CD%\.venv\ffmpeg"
-if exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
-    echo [*] FFmpeg found in venv: %FFMPEG_DIR%
-    set "PATH=%FFMPEG_DIR%\bin;%PATH%"
-    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
-    exit /b 0
+if exist "%CD%\ffmpeg\bin\ffmpeg.exe" (
+    echo [*] FFmpeg found: %CD%\ffmpeg
+    set "PATH=%CD%\ffmpeg\bin;%PATH%"
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
 )
 
-echo FFmpeg not found, auto-installing to .venv...
-echo.
-
-echo [1/3] Testing FFmpeg CDN sources...
-
-set "FFMPEG_CDNS[0]=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip|Gyan.dev"
-set "FFMPEG_CDNS[1]=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip|BtbN"
-set "FFMPEG_CDNS[2]=https://github.com/GyanD/codexffmpeg/releases/download/latest/ffmpeg-release-essentials.zip|CodexFFmpeg"
-
-set "MIN_CDN_TIME=9999"
-set "BEST_CDN_URL="
-set "BEST_CDN_NAME="
-
-for /L %%i in (0,1,4) do (
-    for /f "tokens=1,2 delims=|" %%a in ("!FFMPEG_CDNS[%%i]!") do (
-        set "CDN_URL=%%a"
-        set "CDN_NAME=%%b"
-        echo     Testing !CDN_NAME!...
-
-        curl -s -o nul -w "%%{time_connect}" --connect-timeout 1.5 --max-time 3 "!CDN_URL!" > temp_ffmpeg_time.txt 2>&1
-        set /p CDN_TEST_TIME=<temp_ffmpeg_time.txt
-        del temp_ffmpeg_time.txt 2>nul
-
-        if not defined CDN_TEST_TIME set "CDN_TEST_TIME=9999"
-
-        if "!CDN_TEST_TIME!"=="0" (
-            echo         !CDN_NAME!: timeout/failed
-            set "CDN_TEST_TIME=9999"
-        ) else (
-            for /f "tokens=* delims=" %%t in ('%PYTHON_CMD% -c "print(int(float('!CDN_TEST_TIME!')*1000))"') do set "CDN_INT_TIME=%%t"
-            echo         !CDN_NAME!: !CDN_TEST_TIME!s (!CDN_INT_TIME!ms)
-            if !CDN_INT_TIME! LSS !MIN_CDN_TIME! (
-                set "MIN_CDN_TIME=!CDN_INT_TIME!"
-                set "BEST_CDN_URL=!CDN_URL!"
-                set "BEST_CDN_NAME=!CDN_NAME!"
-            )
-        )
-    )
-if "!BEST_CDN_URL!"=="" (
-    echo [WARNING] All FFmpeg CDN sources unreachable
-    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
+    echo [*] FFmpeg found in venv: %CD%\.venv\ffmpeg
+    set "PATH=%CD%\.venv\ffmpeg\bin;%PATH%"
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
 )
 
-for /L %%i in (0,1,4) do (
-    for /f "tokens=1 delims=|" %%a in ("!FFMPEG_CDNS[%%i]!") do set "CDN_URL_%%i=%%a"
-)
-    exit /b 0
-)
-
-echo.
-echo [*] Fastest CDN for connection: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
-echo     Will try all sources, auto-switching if too slow...
-
-set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
-
-echo [2/3] Downloading FFmpeg...
-%PYTHON_CMD% "%~dp0_download.py" "%FFMPEG_ZIP%" "!CDN_URL_0!" "!CDN_URL_1!" "!CDN_URL_2!" "!CDN_URL_3!" "!CDN_URL_4!"
+echo [*] Running cross-platform FFmpeg setup...
+%PYTHON_CMD% "%CD%\script\server.py" --setup-ffmpeg
 if errorlevel 1 (
-    echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
-    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
-    exit /b 0
+    echo [WARNING] FFmpeg auto-install failed, AC3/EAC3 audio will have no sound in browser
+    goto :eof
 )
 
-if not exist "%FFMPEG_ZIP%" (
-    echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
-    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
-    exit /b 0
+if exist "%CD%\ffmpeg\bin\ffmpeg.exe" (
+    set "PATH=%CD%\ffmpeg\bin;%PATH%"
+    echo [*] FFmpeg installed successfully:
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
 )
 
-for %%A in ("%FFMPEG_ZIP%") do set FFMPEG_SIZE=%%~zA
-if !FFMPEG_SIZE! LSS 10000000 (
-    echo [WARNING] Downloaded file too small (!FFMPEG_SIZE! bytes), download may be incomplete
-    del "%FFMPEG_ZIP%" 2>nul
-    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
-    exit /b 0
-)
-
-echo [3/3] Extracting FFmpeg to .venv...
-if exist "%TEMP%\ffmpeg_extract" rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
-
-%PYTHON_CMD% -c "import zipfile; z=zipfile.ZipFile(r'%FFMPEG_ZIP%'); z.extractall(r'%TEMP%\ffmpeg_extract'); z.close()"
-if errorlevel 1 (
-    echo     Python extraction failed, trying PowerShell...
-    powershell -Command "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath '%TEMP%\ffmpeg_extract' -Force"
-    if errorlevel 1 (
-        echo [WARNING] FFmpeg extraction failed
-        del "%FFMPEG_ZIP%" 2>nul
-        exit /b 0
-    )
-)
-
-set "FFMPEG_FOUND="
-for /d %%d in ("%TEMP%\ffmpeg_extract\*") do (
-    if exist "%%d\bin\ffmpeg.exe" (
-        set "FFMPEG_FOUND=%%d"
-        if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
-        move "%%d" "%FFMPEG_DIR%" >nul 2>&1
-        if not exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
-            xcopy "%%d" "%FFMPEG_DIR%" /e /i /y /q >nul 2>&1
-        )
-    )
-)
-
-rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
-del "%FFMPEG_ZIP%" 2>nul
-
-if not defined FFMPEG_FOUND (
-    echo [WARNING] FFmpeg binary not found in extracted archive
-    dir "%TEMP%\ffmpeg_extract" 2>nul
-    if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
-    exit /b 0
-)
-
-if exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
-    set "PATH=%FFMPEG_DIR%\bin;%PATH%"
-    echo [*] FFmpeg installed to .venv: %FFMPEG_DIR%\bin\ffmpeg.exe
-    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
-) else (
-    echo [WARNING] FFmpeg installation failed, AC3/EAC3 audio will have no sound in browser
-    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
-    if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
-)
-exit /b 0
+goto :eof
 
 :test_pip_mirrors
 echo [2/5] Testing PIP mirror sources...
@@ -575,7 +473,7 @@ echo.
 
 call %VENV_PATH%\Scripts\activate.bat
 cd /d "%~dp0"
-%PYTHON_CMD% "%~dp0server.py" %SERVER_PORT%
+%PYTHON_CMD% "%~dp0script\server.py" %SERVER_PORT%
 pause
 exit /b 0
 

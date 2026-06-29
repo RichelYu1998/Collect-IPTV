@@ -433,6 +433,7 @@
         let currentPlayName = '';
         let currentHls = null;
         let currentTranscodeId = null;
+        let retryCount = 0;
         let transcodeCheckTimer = null;
         let ffmpegAvailable = null;
         let audioProbeAbort = null;
@@ -464,6 +465,7 @@
             if (!url) return;
             currentPlayUrl = url;
             currentPlayName = name;
+            retryCount = 0;
 
             const video = document.getElementById('videoPlayer');
             const overlay = document.getElementById('playerOverlay');
@@ -516,14 +518,33 @@
                         if (startBtn) startBtn.classList.add('hidden');
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                showPlayerError('网络错误，无法加载直播流（可能源不可用）');
+                                if (!currentTranscodeId && !retryCount) {
+                                    retryCount++;
+                                    console.log('Network error, attempting transcode...');
+                                    startAudioTranscode('');
+                                } else {
+                                    showPlayerError('直播源暂时不可用，请稍后重试或更换其他频道');
+                                    retryCount = 0;
+                                }
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                currentHls.recoverMediaError();
+                                if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
+                                    data.details === Hls.ErrorDetails.BUFFER_APPEND_ERROR) {
+                                    currentHls.startLoad();
+                                } else {
+                                    currentHls.recoverMediaError();
+                                }
                                 break;
                             default:
-                                showPlayerError('播放出错：' + (data.details || '未知错误'));
-                                destroyHls();
+                                if (!currentTranscodeId && !retryCount) {
+                                    retryCount++;
+                                    console.log('Playback error, attempting transcode...');
+                                    startAudioTranscode('');
+                                } else {
+                                    showPlayerError('播放异常：' + (data.details || '未知错误'));
+                                    destroyHls();
+                                    retryCount = 0;
+                                }
                                 break;
                         }
                     } else if (data.details && data.details.indexOf('audio') !== -1) {
@@ -612,7 +633,7 @@
             }
         }
 
-        async function startAudioTranscode(codecName) {
+        async function startAudioTranscode(codecName, silentMode = false) {
             if (currentTranscodeId) return;
 
             if (ffmpegAvailable === null) {
@@ -626,29 +647,63 @@
             }
 
             if (!ffmpegAvailable) {
-                showAudioWarning('音频编码 ' + (codecName || '') + ' 浏览器不支持，且未安装FFmpeg无法转码。请安装FFmpeg或用PotPlayer/VLC播放');
+                if (!silentMode) {
+                    showAudioWarning('音频编码 ' + (codecName || '') + ' 浏览器不支持，且未安装FFmpeg无法转码。请安装FFmpeg或用PotPlayer/VLC播放');
+                }
                 return;
             }
 
-            showAudioWarning('正在转码音频 (' + (codecName || '') + ' → AAC)...');
+            const indicator = document.getElementById('transcodeIndicator');
+            const statusText = document.getElementById('transcodeStatusText');
+            const statusIcon = document.getElementById('playerStatusIcon');
+
+            if (indicator && statusText) {
+                indicator.classList.remove('hidden');
+                indicator.classList.add('flex');
+                statusText.textContent = '优化中...';
+            }
+            if (statusIcon) {
+                statusIcon.className = 'fa fa-cog text-blue-400 text-lg flex-shrink-0 fa-spin';
+            }
+
+            console.log('[Transcode] Starting transcode session for:', currentPlayUrl);
 
             try {
                 const resp = await fetch('/transcode/start/' + encodeURIComponent(currentPlayUrl));
                 const data = await resp.json();
 
                 if (data.error) {
-                    showAudioWarning('转码启动失败: ' + data.error);
+                    hideTranscodeIndicator();
+                    if (!silentMode) {
+                        showAudioWarning('转码启动失败: ' + data.error);
+                    }
                     return;
                 }
 
                 currentTranscodeId = data.session_id;
-                pollTranscodeStatus();
+                console.log('[Transcode] Session started:', currentTranscodeId);
+                pollTranscodeStatus(silentMode);
             } catch (e) {
-                showAudioWarning('转码请求失败: ' + e.message);
+                hideTranscodeIndicator();
+                if (!silentMode) {
+                    showAudioWarning('转码请求失败: ' + e.message);
+                }
             }
         }
 
-        function pollTranscodeStatus() {
+        function hideTranscodeIndicator() {
+            const indicator = document.getElementById('transcodeIndicator');
+            const statusIcon = document.getElementById('playerStatusIcon');
+            if (indicator) {
+                indicator.classList.add('hidden');
+                indicator.classList.remove('flex');
+            }
+            if (statusIcon) {
+                statusIcon.className = 'fa fa-play-circle text-green-400 text-lg flex-shrink-0';
+            }
+        }
+
+        function pollTranscodeStatus(silentMode = false) {
             if (transcodeCheckTimer) clearInterval(transcodeCheckTimer);
 
             let attempts = 0;
@@ -658,7 +713,11 @@
                     clearInterval(transcodeCheckTimer);
                     transcodeCheckTimer = null;
                     if (currentTranscodeId) {
-                        showAudioWarning('转码超时，请用PotPlayer/VLC播放');
+                        console.log('[Transcode] Timeout after', attempts, 'attempts');
+                        hideTranscodeIndicator();
+                        if (!silentMode) {
+                            showAudioWarning('加载超时，请稍后重试');
+                        }
                         stopTranscode();
                     }
                     return;
@@ -671,7 +730,11 @@
                     if (!data.alive) {
                         clearInterval(transcodeCheckTimer);
                         transcodeCheckTimer = null;
-                        showAudioWarning('FFmpeg转码进程异常退出，请用PotPlayer/VLC播放');
+                        console.log('[Transcode] FFmpeg process exited unexpectedly');
+                        hideTranscodeIndicator();
+                        if (!silentMode) {
+                            showAudioWarning('直播流异常中断');
+                        }
                         currentTranscodeId = null;
                         return;
                     }
@@ -688,13 +751,22 @@
         }
 
         function switchToTranscodeStream() {
+            console.log('[Transcode] Stream ready, switching to transcoded stream:', currentTranscodeId);
+
             const video = document.getElementById('videoPlayer');
             const loading = document.getElementById('playerLoading');
             const startBtn = document.getElementById('startPlayBtn');
+            const errorDiv = document.getElementById('playerError');
             if (!video) return;
 
             if (loading) loading.classList.remove('hidden');
             if (startBtn) startBtn.classList.add('hidden');
+            if (errorDiv) errorDiv.classList.add('hidden');
+
+            retryCount = 0;
+
+            const statusText = document.getElementById('transcodeStatusText');
+            if (statusText) statusText.textContent = '连接中...';
 
             if (currentHls) {
                 currentHls.destroy();
@@ -702,6 +774,7 @@
             }
 
             const transcodeUrl = '/tstream/' + currentTranscodeId + '/index.m3u8';
+            console.log('[Transcode] Loading transcoded URL:', transcodeUrl);
 
             if (Hls.isSupported()) {
                 currentHls = new Hls({
@@ -713,22 +786,27 @@
                 currentHls.loadSource(transcodeUrl);
                 currentHls.attachMedia(video);
                 currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    console.log('[Transcode] Transcoded stream manifest loaded successfully');
+                    hideTranscodeIndicator();
                     if (loading) loading.classList.add('hidden');
                     tryPlayWithSound(video);
                 });
                 currentHls.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
+                        console.error('[Transcode] Error playing transcoded stream:', data);
                         if (loading) loading.classList.add('hidden');
                         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
                             currentHls.recoverMediaError();
                         } else {
-                            showPlayerError('转码流播放出错：' + (data.details || ''));
+                            showPlayerError('直播流异常中断，请重试');
                         }
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = transcodeUrl;
                 video.addEventListener('loadedmetadata', () => {
+                    console.log('[Transcode] Safari native HLS loaded metadata');
+                    hideTranscodeIndicator();
                     if (loading) loading.classList.add('hidden');
                     tryPlayWithSound(video);
                 }, { once: true });
@@ -853,6 +931,8 @@
                 overlay.classList.add('hidden');
             }
             if (startBtn) startBtn.classList.add('hidden');
+            hideTranscodeIndicator();
+            stopTranscode();
             destroyHls();
         }
 
@@ -899,8 +979,12 @@
         <div id="playerWrapper" class="bg-gray-900 rounded-xl shadow-2xl overflow-hidden w-full max-w-4xl" onclick="event.stopPropagation()">
             <div class="flex items-center justify-between px-5 py-3 bg-gray-800">
                 <div class="flex items-center gap-3 min-w-0">
-                    <i class="fa fa-play-circle text-green-400 text-lg flex-shrink-0"></i>
+                    <i id="playerStatusIcon" class="fa fa-play-circle text-green-400 text-lg flex-shrink-0"></i>
                     <span id="playerTitle" class="text-white font-medium truncate">正在播放</span>
+                    <div id="transcodeIndicator" class="hidden items-center gap-1.5 px-2 py-0.5 bg-blue-500/20 rounded-full text-xs text-blue-300">
+                        <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+                        <span id="transcodeStatusText">优化中</span>
+                    </div>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                      <button id="muteBtn" onclick="toggleMute()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="静音">

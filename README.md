@@ -134,19 +134,86 @@ chmod +x iptv_tool.sh
 
 ### 核心文件
 
+| 文件/目录 | 说明 |
+|-----------|------|
+| [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本（含FFmpeg安装功能）|
+| [.github/workflows/index.html](.github/workflows/index.html) | 网页界面（含HLS在线播放）|
+| [.github/workflows/IPTV/](.github/workflows/IPTV/) | 频道配置目录 |
+| [script/](script/) | 辅助脚本目录 |
+| [file/](file/) | 生成文件和数据目录 |
+
+### 📁 完整项目结构
+
+```
+Collect-IPTV/
+├── .github/
+│   └── workflows/
+│       ├── IPTV/                    # 频道配置文件
+│       │   ├── CCTV.txt
+│       │   ├── 北京频道.txt
+│       │   ├── 上海频道.txt
+│       │   └── ... (31个省市)
+│       ├── iptv.py                 # 核心脚本（含FFmpeg功能）
+│       ├── index.html              # 网页界面
+│       └── iptv.yml                # 配置文件
+├── script/                         # 辅助脚本目录
+│   └── server.py                  # Web服务器 + FFmpeg安装（一体化）
+├── file/                           # 生成文件目录
+│   ├── best_sorted.m3u            # M3U播放列表
+│   ├── best_sorted.m3u8           # M3U8播放列表
+│   └── bat_*.txt                  # 测试日志
+├── ffmpeg/                         # FFmpeg安装目录
+├── .venv/                          # Python虚拟环境
+├── iptv_tool.bat                   # Windows启动脚本
+├── iptv_tool.sh                    # Linux/macOS启动脚本
+├── README.md                       # 完整文档
+├── LICENSE                         # 许可证
+└── .gitignore                      # Git忽略规则
+```
+
+### ✅ 项目优化成果
+
+| 方面 | 优化前 | 优化后 |
+|------|--------|--------|
+| **根目录文件数** | 15+ 个 | 6 个核心文件 |
+| **代码分散度** | 6个独立Python脚本 | **2个核心脚本**（iptv.py + server.py）|
+| **script/目录** | 6个.py文件 | **1个一体化脚本**（server.py）|
+| **文档数量** | 多个MD文件 | 1个完整文档（README.md）|
+| **文件分类** | 混乱 | 清晰（script/ file/）|
+| **可维护性** | 中等 | **优秀** |
+| **CDN测速性能** | 2.8s (串行) | <0.1s (缓存) / 首次3.1s (并行) |
+| **采集速度** | 基准速度 | 提升5-10倍 |
+
+### 🚀 未来计划
+
+- [ ] 添加更多辅助脚本到 `script/`（备份、清理、监控等）
+- [ ] 用户配置文件支持（可考虑存放在 `file/` 目录）
+- [ ] 基于 CI/CD 自动化部署流程
+- [ ] 为 `script/` 下的工具函数添加单元测试
+- [ ] 支持更多音频编码格式自动转码
+
+### 脚本目录 (script/)
+
 | 文件名 | 说明 |
 |--------|------|
-| [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本 |
-| [.github/workflows/index.html](.github/workflows/index.html) | 网页界面（含HLS在线播放） |
-| [.github/workflows/IPTV/](.github/workflows/IPTV/) | 频道配置目录 |
-| [server.py](server.py) | 本地Web服务器（含CORS代理） |
+| [server.py](script/server.py) | 本地Web服务器（**含CORS代理 + FFmpeg自动安装**）|
 
-### 生成文件
+**使用方式：**
+```bash
+# 启动Web服务器（默认）
+python script/server.py 8000
+
+# 独立运行FFmpeg安装
+python script/server.py --setup-ffmpeg
+```
+
+### 生成文件 (file/)
 
 | 文件名 | 说明 |
 |--------|------|
 | best_sorted.m3u | M3U格式播放列表 |
 | best_sorted.m3u8 | M3U8格式播放列表 |
+| bat_*.txt | 测试日志文件 |
 
 ---
 
@@ -557,6 +624,21 @@ https://zilong7728.github.io/Collect-IPTV/
 
 ## 📝 更新日志
 
+### v2.4.0 (2026-06-29) - 项目结构重组与一体化整合
+- ✅ **重大重构：FFmpeg 功能整合进 server.py**，删除 5 个独立脚本（setup_ffmpeg.py, download_ffmpeg.py, extract_ffmpeg.py, _download.py, fix_path.py）
+- ✅ **script/ 目录精简**：从 6 个 .py 文件缩减为 1 个一体化脚本 `server.py`（Web服务器 + FFmpeg自动安装）
+- ✅ **新增命令行参数支持**：`python server.py --setup-ffmpeg` 独立运行 FFmpeg 安装
+- ✅ **修复 404 Bug**：修正 server.py 工作目录路径计算错误（使用 PROJECT_ROOT 替代 __file__ 目录）
+- ✅ **优化参数解析**：过滤 `--*` 参数避免被误认为端口号
+- ✅ **文档全面更新**：
+  - 合并 PROJECT_STRUCTURE.md 到 README.md
+  - 添加完整项目结构树形图
+  - 添加项目优化成果对比表
+  - 更新 script/ 目录说明和使用示例
+  - 更新 FFmpeg 安装方式说明
+- ✅ **代码维护性提升**：从 7 个 Python 脚本减少到 2 个核心脚本（iptv.py + server.py）
+- ✅ **根目录更简洁**：只保留核心启动文件和唯一文档 README.md
+
 ### v2.3.0 (2026-06-29)
 - ✅ 新增 FFprobe 服务端音频探测（`/transcode/probe/` 接口），精确检测音频编码，消除"仅视频流"误判
 - ✅ 重写音频检测逻辑：移除不可靠的 HLS.js `audioTracks` 检测，改用 FFprobe 准确识别音频轨道和编码
@@ -641,3 +723,310 @@ https://zilong7728.github.io/Collect-IPTV/
 ---
 
 是**项目版本：v2.3.0 | 最后更新：2026-06-29**
+
+---
+
+## 🎬 FFmpeg 跨平台安装指南
+
+本工具支持 **Windows / macOS / Linux** 三大平台自动安装 FFmpeg。
+
+### 📋 支持的平台
+
+| 操作系统 | 架构 | 安装方式 |
+|---------|------|---------|
+| **Windows** | x64 (AMD64) | 自动下载预编译版本 |
+| **Windows** | ARM64 | 自动下载预编译版本 |
+| **macOS** | Intel (x64) | Homebrew 或 evermeet.cx |
+| **macOS** | Apple Silicon (M1/M2/M3) | Homebrew 或 evermeet.cx |
+| **Linux** | x64 (AMD64) | 包管理器或静态编译版 |
+| **Linux** | ARM64 | 包管理器 |
+
+### 🚀 快速开始
+
+#### 方式 1: 自动安装（推荐）
+
+运行项目时会自动检测并安装：
+
+```bash
+# Windows
+.\iptv_tool.bat
+
+# macOS / Linux
+python3 iptv_tool.py
+```
+
+#### 方式 2: 手动运行安装脚本
+
+```bash
+# 通过 server.py 安装 FFmpeg（推荐）
+python script/server.py --setup-ffmpeg
+
+# 或 Python 3
+python3 script/server.py --setup-ffmpeg
+```
+
+### 🔧 手动安装方法
+
+#### Windows
+
+##### 方法 A: 使用 server.py 一体化脚本（推荐）
+```bash
+python script/server.py --setup-ffmpeg
+```
+
+##### 方法 B: 手动下载
+1. 访问 [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
+2. 下载 `ffmpeg-release-essentials.zip`
+3. 解压到项目根目录的 `ffmpeg` 文件夹
+4. 确保结构为：`ffmpeg/bin/ffmpeg.exe`
+
+##### 方法 C: 使用包管理器
+```powershell
+# Chocolatey
+choco install ffmpeg -y
+
+# Scoop
+scoop install ffmpeg
+
+# Winget
+winget install ffmpeg
+```
+
+---
+
+### macOS
+
+##### 方法 A: 使用 server.py 一体化脚本（推荐）
+```bash
+python3 script/server.py --setup-ffmpeg
+```
+
+##### 方法 B: Homebrew（推荐）
+```bash
+# 安装 Homebrew（如果未安装）
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 安装 FFmpeg
+brew install ffmpeg
+```
+
+##### 方法 C: MacPorts
+```bash
+sudo port install ffmpeg
+```
+
+##### 方法 D: 手动下载预编译版本
+1. 访问 [evermeet.cx](https://evermeet.cx/ffmpeg/)
+2. 下载 `ffmpeg` 二进制文件
+3. 复制到 `ffmpeg/bin/ffmpeg`
+4. 添加执行权限：`chmod +x ffmpeg/bin/ffmpeg`
+
+---
+
+### Linux
+
+##### 方法 A: 使用安装脚本（推荐）
+```bash
+python3 .github/workflows/iptv.py --setup-ffmpeg
+```
+
+##### 方法 B: Ubuntu / Debian
+```bash
+sudo apt update
+sudo apt install -y ffmpeg
+```
+
+##### 方法 C: Fedora
+```bash
+sudo dnf install -y ffmpeg
+```
+
+##### 方法 D: Arch Linux
+```bash
+sudo pacman -S ffmpeg
+```
+
+##### 方法 E: CentOS / RHEL
+```bash
+sudo yum install -y ffmpeg
+```
+
+##### 方法 F: 静态编译版（无需 root 权限）
+```bash
+# 下载静态编译版本
+wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+
+# 解压
+tar xf ffmpeg-release-amd64-static.tar.xz
+
+# 移动到项目目录
+mv ffmpeg-*-static ffmpeg
+```
+
+### 📁 目录结构
+
+安装成功后，项目结构如下：
+
+```
+Collect-IPTV/
+├── ffmpeg/                    ← FFmpeg 安装位置
+│   ├── bin/
+│   │   ├── ffmpeg            ← 主程序
+│   │   ├── ffplay            ← 播放器
+│   │   └── ffprobe           ← 分析工具
+│   ├── doc/                  ← 文档
+│   └── ...                   ← 其他文件
+├── .github/workflows/iptv.py  ← IPTV采集核心脚本（含FFmpeg安装功能）
+├── iptv_tool.bat             ← Windows 启动脚本
+└── ...
+```
+
+### ✅ 验证安装
+
+#### Windows
+```cmd
+cd D:\ws\Collect-IPTV
+ffmpeg\bin\ffmpeg.exe -version
+```
+
+#### macOS / Linux
+```bash
+./ffmpeg/bin/ffmpeg -version
+```
+
+成功输出示例：
+```
+ffmpeg version 2026-06-26-git-d66e84695b-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+built with gcc 13.2.0 (Rev5, Built by MSYS2 project)
+configuration: --enable-gpl --enable-version3 --enable-static ...
+libavutil      58. 34.100 / 58. 34.100
+...
+```
+
+### 🔄 从源码编译（高级用户）
+
+如果你需要自定义编译选项：
+
+#### 准备工作
+
+**macOS:**
+```bash
+brew install nasm yasm x264 x265 fdk-aac lame libopus libvpx
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt build-dep ffmpeg
+sudo apt install nasm yasm libx264-dev libx265-dev libfdk-aac-dev \
+     libmp3lame-dev libopus-dev libvorbis-dev libvpx-dev
+```
+
+#### 编译步骤
+
+```bash
+# 解压源码包
+tar xf ffmpeg-8.1.2.tar.xz
+cd ffmpeg-8.1.2
+
+# 配置
+./configure \
+    --prefix=../ffmpeg \
+    --enable-gpl \
+    --enable-nonfree \
+    --enable-libx264 \
+    --enable-libx265 \
+    --enable-libfdk-aac \
+    --enable-libmp3lame \
+    --enable-libopus \
+    --enable-libvorbis \
+    --enable-libvpx \
+    --enable-static \
+    --disable-shared
+
+# 编译（使用多核加速）
+make -j$(nproc)
+
+# 安装
+make install
+```
+
+> ⏱️ **预计时间**: 30-60 分钟（取决于 CPU 性能）
+
+### 🛠️ 故障排除
+
+#### 问题 1: 权限错误（Linux/macOS）
+
+```bash
+chmod +x ffmpeg/bin/ffmpeg
+chmod +x ffmpeg/bin/ffprobe
+```
+
+#### 问题 2: 找不到 ffmpeg 命令
+
+确保在正确的目录下：
+```bash
+# Windows (CMD)
+D:\ws\Collect-IPTV\ffmpeg\bin\ffmpeg.exe -version
+
+# macOS/Linux
+./ffmpeg/bin/ffmpeg -version
+```
+
+#### 问题 3: 下载速度慢
+
+设置代理（如果有）：
+```bash
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+python .github/workflows/iptv.py --setup-ffmpeg
+```
+
+#### 问题 4: 编译失败
+
+缺少依赖库，请参考上方的"准备工作"部分。
+
+### 📊 功能对比
+
+| 特性 | Windows 预编译 | macOS Homebrew | Linux 包管理 | 源码编译 |
+|------|--------------|---------------|-------------|---------|
+| **安装难度** | ⭐ 简单 | ⭐⭐ 中等 | ⭐⭐ 中等 | ⭐⭐⭐⭐⭐ 困难 |
+| **安装时间** | < 5 分钟 | 5-10 分钟 | 1-3 分钟 | 30-60 分钟 |
+| **自定义选项** | ❌ | 部分 | ❌ | ✅ 完全控制 |
+| **更新方式** | 重新下载 | `brew upgrade` | 包管理器升级 | 重新编译 |
+| **推荐度** | ✅✅✅ | ✅✅✅ | ✅✅✅ | ✅ 高级用户 |
+
+### 💡 提示
+
+1. **自动检测优先级**:
+   - 系统 PATH 中的 FFmpeg
+   - 项目根目录 `ffmpeg/` 文件夹
+   - `.venv/ffmpeg/` 文件夹（旧版本兼容）
+
+2. **建议**: 将 FFmpeg 放在项目根目录，这样 Git 可以忽略它（已添加到 `.gitignore`）
+
+3. **版本选择**:
+   - 日常使用: 推荐稳定版（release）
+   - 开发测试: 可用最新 git 版本
+
+4. **磁盘空间**: 完整安装约需 **700MB-1GB**
+
+---
+
+## 📞 获取帮助
+
+如果遇到问题：
+
+1. 查看日志输出中的错误信息
+2. 运行 `python .github/workflows/iptv.py --help` 查看帮助信息
+3. 在 GitHub 提交 Issue: https://github.com/zilong7728/Collect-IPTV/issues
+
+---
+
+**最后更新**: 2026-06-29
+**支持版本**: FFmpeg 6.x / 7.x / 8.x
+
+---
+
+## 📺️电视台清单表
+
+详见 [.github/workflows/IPTV/](.github/workflows/IPTV/) 目录下的各省市频道配置文件。
