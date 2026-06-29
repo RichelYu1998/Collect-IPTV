@@ -231,14 +231,36 @@ echo.
 echo [*] Fastest FFmpeg CDN: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
 
 set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
-set "FFMPEG_URL_FILE=%TEMP%\ffmpeg_url.txt"
-
-echo !BEST_CDN_URL! > "!FFMPEG_URL_FILE!"
 
 echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
-curl -L -o "%FFMPEG_ZIP%" -K NUL --url @"!FFMPEG_URL_FILE!" --connect-timeout 15 --max-time 300 -# --retry 3 --retry-delay 5
-
-del "!FFMPEG_URL_FILE!" 2>nul
+%PYTHON_CMD% -c "
+import urllib.request, sys, os
+url = r'!BEST_CDN_URL!'
+dest = r'%FFMPEG_ZIP%'
+print(f'  Downloading to {os.path.basename(dest)}...')
+try:
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    resp = urllib.request.urlopen(req, timeout=300)
+    total = int(resp.headers.get('Content-Length', 0))
+    with open(dest, 'wb') as f:
+        downloaded = 0
+        while True:
+            chunk = resp.read(8192)
+            if not chunk:
+                break
+            f.write(chunk)
+            downloaded += len(chunk)
+            if total > 0:
+                pct = downloaded * 100 // total
+                bar = '#' * (pct // 2) + '-' * (50 - pct // 2)
+                sys.stdout.write(f'\r  [{bar}] {pct}%')
+                sys.stdout.flush()
+    print()
+    print('  Download complete!')
+except Exception as e:
+    print(f'  Error: {e}')
+    sys.exit(1)
+"
 
 if not exist "%FFMPEG_ZIP%" (
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
