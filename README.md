@@ -320,14 +320,14 @@ brew install python3
 python3 -m ensurepip --upgrade
 
 # 手动创建虚拟环境
-python3 -m venv venv
+python3 -m venv .venv
 
 # 激活虚拟环境
 # Windows
-venv\Scripts\activate
+.venv\Scripts\activate
 
 # Linux/macOS
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
 ### 3. 依赖安装失败
@@ -349,7 +349,7 @@ pip install aiohttp --user
 **Linux/macOS**：
 ```bash
 # 使用虚拟环境
-source venv/bin/activate
+source .venv/bin/activate
 pip install aiohttp
 
 # 或使用--user选项

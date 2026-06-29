@@ -349,14 +349,9 @@ exit /b 0
 :detect_venv
 echo [3/5] Detecting Python virtual environment...
 
-if exist venv\Scripts\activate.bat (
-    echo Found virtual environment: venv
-    set VENV_EXISTS=1
-    set VENV_PATH=venv
-) else if exist .venv\Scripts\activate.bat (
+if exist .venv\Scripts\activate.bat (
     echo Found virtual environment: .venv
     set VENV_EXISTS=1
-    set VENV_PATH=.venv
 ) else (
     echo No virtual environment found
     set VENV_EXISTS=0

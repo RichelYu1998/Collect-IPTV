@@ -264,14 +264,9 @@ test_pip_mirrors() {
 detect_venv() {
     echo "[3/5] Detecting Python virtual environment..."
 
-    if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
-        echo "Found virtual environment: venv"
-        VENV_EXISTS=1
-        VENV_PATH="venv"
-    elif [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
+    if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
         echo "Found virtual environment: .venv"
         VENV_EXISTS=1
-        VENV_PATH=".venv"
     else
         echo "No virtual environment found"
         VENV_EXISTS=0
