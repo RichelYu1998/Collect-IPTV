@@ -429,9 +429,12 @@
         el.categoryFilter.addEventListener('change', filterChannels);
         el.formatFilter.addEventListener('change', loadData);
 
-        let currentHls = null;
         let currentPlayUrl = '';
         let currentPlayName = '';
+        let currentHls = null;
+        let currentTranscodeId = null;
+        let transcodeCheckTimer = null;
+        let ffmpegAvailable = null;
 
         function proxyUrl(url) {
             if (!url) return '';
@@ -449,6 +452,7 @@
             const overlay = document.getElementById('playerOverlay');
             const loading = document.getElementById('playerLoading');
             const errorDiv = document.getElementById('playerError');
+            const startBtn = document.getElementById('startPlayBtn');
             const title = document.getElementById('playerTitle');
 
             if (!video || !overlay) return;
@@ -456,14 +460,16 @@
             if (title) title.textContent = name || '未知频道';
             if (loading) loading.classList.remove('hidden');
             if (errorDiv) errorDiv.classList.add('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+
+            video.muted = true;
+            video.volume = parseFloat(document.getElementById('volumeSlider') ? document.getElementById('volumeSlider').value : 1);
+            updateVolumeUI();
 
             overlay.classList.remove('hidden');
             overlay.classList.add('visible');
 
             destroyHls();
-
-            video.volume = 1;
-            video.muted = false;
 
             const proxiedUrl = proxyUrl(url);
 
@@ -476,12 +482,19 @@
                 });
                 currentHls.loadSource(proxiedUrl);
                 currentHls.attachMedia(video);
-                currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                currentHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
                     if (loading) loading.classList.add('hidden');
+                    video.play().catch(() => {});
+                    if (startBtn) startBtn.classList.remove('hidden');
+                    checkAudioTracks(data);
+                });
+                currentHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
+                    checkAudioTracks(data);
                 });
                 currentHls.on(Hls.Events.ERROR, (event, data) => {
                     if (data.fatal) {
                         if (loading) loading.classList.add('hidden');
+                        if (startBtn) startBtn.classList.add('hidden');
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
                                 showPlayerError('网络错误，无法加载直播流（可能源不可用）');
@@ -494,12 +507,16 @@
                                 destroyHls();
                                 break;
                         }
+                    } else if (data.details && data.details.indexOf('audio') !== -1) {
+                        showAudioWarning('音频解码失败，该频道可能使用了浏览器不支持的音频编码');
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = proxiedUrl;
                 video.addEventListener('loadedmetadata', () => {
                     if (loading) loading.classList.add('hidden');
+                    video.play().catch(() => {});
+                    if (startBtn) startBtn.classList.remove('hidden');
                 }, { once: true });
                 video.addEventListener('error', () => {
                     if (loading) loading.classList.add('hidden');
@@ -511,6 +528,301 @@
             }
         }
 
+        function checkAudioTracks(data) {
+            const audioWarning = document.getElementById('audioWarning');
+            if (!audioWarning || !currentHls) {
+                if (audioWarning) audioWarning.classList.add('hidden');
+                return;
+            }
+
+            const levels = currentHls.levels || [];
+            let hasUnsupportedAudio = false;
+            let audioCodecName = '';
+
+            for (const level of levels) {
+                if (level.audioCodec) {
+                    audioCodecName = level.audioCodec;
+                    const codec = level.audioCodec.toLowerCase();
+                    if (codec.indexOf('ac-3') !== -1 || codec.indexOf('ac3') !== -1 ||
+                        codec.indexOf('ec-3') !== -1 || codec.indexOf('eac3') !== -1) {
+                        hasUnsupportedAudio = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasUnsupportedAudio) {
+                startAudioTranscode(audioCodecName);
+                return;
+            }
+
+            const audioTracks = currentHls.audioTracks || [];
+            let hasAudioCodec = false;
+            for (const level of levels) {
+                if (level.audioCodec || (level.audioGroup && level.audioGroup.length > 0)) {
+                    hasAudioCodec = true;
+                    break;
+                }
+            }
+            if (audioTracks.length === 0 && levels.length > 0 && !hasAudioCodec) {
+                showAudioWarning('该频道可能无音频轨道（仅视频流）');
+                return;
+            }
+
+            audioWarning.classList.add('hidden');
+        }
+
+        async function startAudioTranscode(codecName) {
+            if (currentTranscodeId) return;
+
+            if (ffmpegAvailable === null) {
+                try {
+                    const resp = await fetch('/transcode/check/');
+                    const data = await resp.json();
+                    ffmpegAvailable = data.ffmpeg;
+                } catch (e) {
+                    ffmpegAvailable = false;
+                }
+            }
+
+            if (!ffmpegAvailable) {
+                showAudioWarning('音频编码 ' + (codecName || '') + ' 浏览器不支持，且未安装FFmpeg无法转码。请安装FFmpeg或用PotPlayer/VLC播放');
+                return;
+            }
+
+            showAudioWarning('正在转码音频 (' + (codecName || '') + ' → AAC)...');
+
+            try {
+                const resp = await fetch('/transcode/start/' + encodeURIComponent(currentPlayUrl));
+                const data = await resp.json();
+
+                if (data.error) {
+                    showAudioWarning('转码启动失败: ' + data.error);
+                    return;
+                }
+
+                currentTranscodeId = data.session_id;
+                pollTranscodeStatus();
+            } catch (e) {
+                showAudioWarning('转码请求失败: ' + e.message);
+            }
+        }
+
+        function pollTranscodeStatus() {
+            if (transcodeCheckTimer) clearInterval(transcodeCheckTimer);
+
+            let attempts = 0;
+            transcodeCheckTimer = setInterval(async () => {
+                attempts++;
+                if (attempts > 40 || !currentTranscodeId) {
+                    clearInterval(transcodeCheckTimer);
+                    transcodeCheckTimer = null;
+                    if (currentTranscodeId) {
+                        showAudioWarning('转码超时，请用PotPlayer/VLC播放');
+                        stopTranscode();
+                    }
+                    return;
+                }
+
+                try {
+                    const resp = await fetch('/transcode/status/' + currentTranscodeId);
+                    const data = await resp.json();
+
+                    if (!data.alive) {
+                        clearInterval(transcodeCheckTimer);
+                        transcodeCheckTimer = null;
+                        showAudioWarning('FFmpeg转码进程异常退出，请用PotPlayer/VLC播放');
+                        currentTranscodeId = null;
+                        return;
+                    }
+
+                    if (data.ready) {
+                        clearInterval(transcodeCheckTimer);
+                        transcodeCheckTimer = null;
+                        switchToTranscodeStream();
+                    }
+                } catch (e) {
+                    // ignore, retry
+                }
+            }, 500);
+        }
+
+        function switchToTranscodeStream() {
+            const video = document.getElementById('videoPlayer');
+            const loading = document.getElementById('playerLoading');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (!video) return;
+
+            if (loading) loading.classList.remove('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+
+            const transcodeUrl = '/tstream/' + currentTranscodeId + '/index.m3u8';
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                });
+                currentHls.loadSource(transcodeUrl);
+                currentHls.attachMedia(video);
+                currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    if (loading) loading.classList.add('hidden');
+                    const slider = document.getElementById('volumeSlider');
+                    video.volume = slider ? parseFloat(slider.value) : 1;
+                    video.muted = false;
+                    video.play().then(() => {
+                        updateVolumeUI();
+                    }).catch(() => {
+                        video.muted = true;
+                        video.play().catch(() => {});
+                        updateVolumeUI();
+                    });
+                    if (startBtn) startBtn.classList.remove('hidden');
+                });
+                currentHls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        if (loading) loading.classList.add('hidden');
+                        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            currentHls.recoverMediaError();
+                        } else {
+                            showPlayerError('转码流播放出错：' + (data.details || ''));
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = transcodeUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    if (loading) loading.classList.add('hidden');
+                    video.volume = parseFloat(document.getElementById('volumeSlider') ? document.getElementById('volumeSlider').value : 1);
+                    video.muted = false;
+                    video.play().catch(() => {});
+                    if (startBtn) startBtn.classList.remove('hidden');
+                }, { once: true });
+            }
+
+            const audioWarning = document.getElementById('audioWarning');
+            if (audioWarning) audioWarning.classList.add('hidden');
+        }
+
+        function stopTranscode() {
+            if (transcodeCheckTimer) {
+                clearInterval(transcodeCheckTimer);
+                transcodeCheckTimer = null;
+            }
+            if (currentTranscodeId) {
+                const sid = currentTranscodeId;
+                currentTranscodeId = null;
+                fetch('/transcode/stop/' + sid).catch(() => {});
+            }
+        }
+
+        function showAudioWarning(msg) {
+            const audioWarning = document.getElementById('audioWarning');
+            const audioWarningMsg = document.getElementById('audioWarningMsg');
+            if (audioWarningMsg) audioWarningMsg.textContent = msg;
+            if (audioWarning) audioWarning.classList.remove('hidden');
+        }
+
+        function startPlay() {
+            const video = document.getElementById('videoPlayer');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (!video) return;
+            const slider = document.getElementById('volumeSlider');
+            const vol = slider ? parseFloat(slider.value) : 1;
+            video.volume = vol;
+            video.muted = false;
+            video.play().then(() => {
+                updateVolumeUI();
+            }).catch(() => {
+                video.muted = true;
+                video.play().then(() => {
+                    updateVolumeUI();
+                }).catch(() => {});
+                updateVolumeUI();
+            });
+            if (startBtn) startBtn.classList.add('hidden');
+              setTimeout(() => checkAudioTracksDelayed(), 3000);
+        }
+
+        function checkAudioTracksDelayed() {
+            const video = document.getElementById('videoPlayer');
+            const audioWarning = document.getElementById('audioWarning');
+            if (!video || !currentHls || !audioWarning) return;
+
+            if (audioWarning.classList.contains('hidden')) {
+                checkAudioTracks({});
+            }
+
+            if (!currentTranscodeId && !video.muted && video.volume > 0 && currentHls.levels && currentHls.levels.length > 0) {
+                let hasSupportedAudio = false;
+                for (const level of currentHls.levels) {
+                    if (level.audioCodec) {
+                        const codec = level.audioCodec.toLowerCase();
+                        if (codec.indexOf('aac') !== -1 || codec.indexOf('mp4a') !== -1 || codec.indexOf('opus') !== -1) {
+                            hasSupportedAudio = true;
+                            break;
+                        }
+                    } else {
+                        hasSupportedAudio = true;
+                        break;
+                    }
+                }
+                if (!hasSupportedAudio) {
+                    startAudioTranscode(currentHls.levels[0].audioCodec || '');
+                }
+            }
+        }
+
+        function toggleMute() {
+            const video = document.getElementById('videoPlayer');
+            const btn = document.getElementById('muteBtn');
+            const slider = document.getElementById('volumeSlider');
+            const label = document.getElementById('volumeLabel');
+            if (!video) return;
+            video.muted = !video.muted;
+            updateVolumeUI();
+        }
+
+        function setVolume(val) {
+            const video = document.getElementById('videoPlayer');
+            if (!video) return;
+            video.volume = parseFloat(val);
+            if (video.muted && parseFloat(val) > 0) {
+                video.muted = false;
+            }
+            updateVolumeUI();
+        }
+
+        function updateVolumeUI() {
+            const video = document.getElementById('videoPlayer');
+            const btn = document.getElementById('muteBtn');
+            const slider = document.getElementById('volumeSlider');
+            const label = document.getElementById('volumeLabel');
+            if (!video || !btn || !slider || !label) return;
+
+            const vol = video.muted ? 0 : video.volume;
+            slider.value = video.muted ? 0 : video.volume;
+            label.textContent = Math.round(vol * 100) + '%';
+
+            if (video.muted || video.volume === 0) {
+                btn.innerHTML = '<i class="fa fa-volume-off text-lg"></i>';
+                btn.title = '取消静音';
+            } else if (video.volume < 0.5) {
+                btn.innerHTML = '<i class="fa fa-volume-down text-lg"></i>';
+                btn.title = '静音';
+            } else {
+                btn.innerHTML = '<i class="fa fa-volume-up text-lg"></i>';
+                btn.title = '静音';
+            }
+        }
+
         function destroyHls() {
             if (currentHls) {
                 currentHls.destroy();
@@ -519,6 +831,9 @@
             const video = document.getElementById('videoPlayer');
             video.removeAttribute('src');
             video.load();
+            const audioWarning = document.getElementById('audioWarning');
+            if (audioWarning) audioWarning.classList.add('hidden');
+            stopTranscode();
         }
 
         function showPlayerError(msg) {
@@ -577,6 +892,14 @@
                     <span id="playerTitle" class="text-white font-medium truncate">正在播放</span>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
+                     <button id="muteBtn" onclick="toggleMute()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="静音">
+                        <i class="fa fa-volume-up text-lg"></i>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1"
+                            oninput="setVolume(this.value)" class="w-20 accent-blue-500 cursor-pointer" style="height:4px;">
+                        <span id="volumeLabel" class="text-gray-300 text-xs min-w-[32px] text-right">100%</span>
+                    </div>
                     <button onclick="toggleFullscreen()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="全屏">
                         <i class="fa fa-expand text-lg"></i>
                     </button>
@@ -585,8 +908,16 @@
                     </button>
                 </div>
             </div>
+            <div id="audioWarning" class="hidden bg-yellow-900/80 border-t border-yellow-600 px-4 py-2 flex items-center gap-2">
+                <i class="fa fa-exclamation-triangle text-yellow-400 text-sm flex-shrink-0"></i>
+                <span id="audioWarningMsg" class="text-yellow-200 text-xs">音频提示</span>
+            </div>
             <div id="videoContainer" class="relative bg-black aspect-video">
-                <video id="videoPlayer" class="w-full h-full" controls playsinline></video>
+                <video id="videoPlayer" class="w-full h-full" playsinline></video>
+                <div id="startPlayBtn" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 cursor-pointer hidden" onclick="startPlay()">
+                    <i class="fa fa-play-circle text-white text-6xl mb-3 opacity-90 hover:opacity-100 transition-opacity"></i>
+                    <p class="text-white text-sm">点击播放（开启声音）</p>
+                </div>
                 <div id="playerLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 hidden pointer-events-none">
                     <div class="inline-block w-10 h-10 border-4 border-gray-600 border-t-green-400 rounded-full animate-spin mb-3"></div>
                     <p class="text-gray-300 text-sm">正在加载直播流...</p>

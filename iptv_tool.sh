@@ -14,6 +14,14 @@ echo "========================================"
 VENV_PATH=".venv"
 FASTEST_PIP_MIRROR=""
 
+SERVER_PORT="${IPTV_SERVER_PORT:-8000}"
+LAN_IP_DETECT_HOST="${IPTV_LAN_IP_DETECT_HOST:-8.8.8.8}"
+LAN_IP_DETECT_PORT="${IPTV_LAN_IP_DETECT_PORT:-80}"
+export IPTV_TIMEOUT="${IPTV_TIMEOUT:-3}"
+export IPTV_MAX_PARALLEL="${IPTV_MAX_PARALLEL:-30}"
+export IPTV_PROXY_TIMEOUT="${IPTV_PROXY_TIMEOUT:-15}"
+export IPTV_TRANSCODE_SESSION_TIMEOUT="${IPTV_TRANSCODE_SESSION_TIMEOUT:-600}"
+
 detect_python_env() {
     echo ""
     echo "========================================"
@@ -32,6 +40,8 @@ detect_python_env() {
         echo "Python not in PATH, searching system..."
 
         COMMON_PYTHON_PATHS=(
+            "$WORK_DIR/.venv/python/bin/python3"
+            "$WORK_DIR/.venv/python/bin/python"
             "/usr/bin/python3"
             "/usr/local/bin/python3"
             "/opt/homebrew/bin/python3"
@@ -114,6 +124,81 @@ detect_python_env() {
     fi
 
     return 0
+}
+
+detect_ffmpeg() {
+    echo ""
+    echo "========================================"
+    echo "FFmpeg Detection and Installation"
+    echo "========================================"
+
+    if command -v ffmpeg &> /dev/null; then
+        echo "[*] FFmpeg already installed:"
+        ffmpeg -version 2>&1 | head -1
+        return 0
+    fi
+
+    FFMPEG_DIR="$WORK_DIR/.venv/ffmpeg"
+    if [ -x "$FFMPEG_DIR/bin/ffmpeg" ]; then
+        echo "[*] FFmpeg found in venv: $FFMPEG_DIR"
+        export PATH="$FFMPEG_DIR/bin:$PATH"
+        ffmpeg -version 2>&1 | head -1
+        return 0
+    fi
+
+    echo "FFmpeg not found, auto-installing to .venv..."
+    echo ""
+
+    case "$(uname -s)" in
+        Darwin)
+            if command -v brew &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via Homebrew..."
+                brew install ffmpeg
+            elif [ -x "/opt/homebrew/bin/brew" ]; then
+                echo "[1/1] Installing FFmpeg via Homebrew (Apple Silicon)..."
+                /opt/homebrew/bin/brew install ffmpeg
+            else
+                echo "[WARNING] Homebrew not found, cannot auto-install FFmpeg"
+                echo "   Install Homebrew first: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+                echo "   Then run: brew install ffmpeg"
+                return 0
+            fi
+            ;;
+        Linux)
+            if command -v apt-get &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via apt..."
+                sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+            elif command -v yum &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via yum..."
+                sudo yum install -y epel-release 2>/dev/null
+                sudo yum install -y ffmpeg
+            elif command -v dnf &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via dnf..."
+                sudo dnf install -y ffmpeg
+            elif command -v pacman &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via pacman..."
+                sudo pacman -Syu --noconfirm ffmpeg
+            elif command -v apk &> /dev/null; then
+                echo "[1/1] Installing FFmpeg via apk..."
+                sudo apk add ffmpeg
+            else
+                echo "[WARNING] Package manager not recognized, please install FFmpeg manually"
+                return 0
+            fi
+            ;;
+        *)
+            echo "[WARNING] Unsupported OS for auto FFmpeg installation"
+            return 0
+            ;;
+    esac
+
+    if command -v ffmpeg &> /dev/null; then
+        echo "[*] FFmpeg installed successfully:"
+        ffmpeg -version 2>&1 | head -1
+    else
+        echo "[WARNING] FFmpeg installation may have failed, AC3/EAC3 audio will have no sound in browser"
+        echo "   You can manually install FFmpeg from: https://ffmpeg.org/download.html"
+    fi
 }
 
 test_pip_mirrors() {
@@ -337,8 +422,14 @@ setup_scheduled_task_and_web() {
     fi
 
     echo "Starting local web server..."
+
+    LAN_IP=$(python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.connect(('$LAN_IP_DETECT_HOST',$LAN_IP_DETECT_PORT)); ip=s.getsockname()[0]; s.close(); print(ip)" 2>/dev/null || python -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.connect(('$LAN_IP_DETECT_HOST',$LAN_IP_DETECT_PORT)); ip=s.getsockname()[0]; s.close(); print(ip)" 2>/dev/null)
+
     echo ""
-    echo "Server URL: http://localhost:8000"
+    echo "  访问地址: http://localhost:${SERVER_PORT}"
+    if [ -n "$LAN_IP" ]; then
+        echo "  局域网地址: http://${LAN_IP}:${SERVER_PORT}"
+    fi
     echo ""
     echo "Tips:"
     echo "   - Press Ctrl+C to stop the server"
@@ -349,14 +440,14 @@ setup_scheduled_task_and_web() {
     echo ""
 
     source "$VENV_PATH/bin/activate"
-    $PYTHON_CMD "$WORK_DIR/server.py" 8000
+    $PYTHON_CMD "$WORK_DIR/server.py" $SERVER_PORT
     cd "$WORK_DIR"
 }
 
 cleanup_exit() {
     echo ""
     echo "Cleaning up processes..."
-    pkill -f "server.py 8000" >/dev/null 2>&1
+    pkill -f "server.py $SERVER_PORT" >/dev/null 2>&1
     echo "Done"
     exit 0
 }
@@ -366,6 +457,7 @@ main() {
     cd "$WORK_DIR"
 
     detect_python_env || exit 1
+    detect_ffmpeg
     test_pip_mirrors
     detect_venv
     setup_venv

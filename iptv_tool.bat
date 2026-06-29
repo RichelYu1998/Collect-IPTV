@@ -14,11 +14,22 @@ echo ========================================
 set "VENV_PATH=.venv"
 set "FASTEST_PIP_MIRROR="
 
+if not defined SERVER_PORT set "SERVER_PORT=8000"
+if not defined LAN_IP_DETECT_HOST set "LAN_IP_DETECT_HOST=8.8.8.8"
+if not defined LAN_IP_DETECT_PORT set "LAN_IP_DETECT_PORT=80"
+if not defined PYTHON_LATEST_VERSION set "PYTHON_LATEST_VERSION=3.11.9"
+if not defined IPTV_TIMEOUT set "IPTV_TIMEOUT=3"
+if not defined IPTV_MAX_PARALLEL set "IPTV_MAX_PARALLEL=30"
+if not defined IPTV_PROXY_TIMEOUT set "IPTV_PROXY_TIMEOUT=15"
+if not defined IPTV_TRANSCODE_SESSION_TIMEOUT set "IPTV_TRANSCODE_SESSION_TIMEOUT=600"
+
 call :detect_python_env
 if errorlevel 1 (
     pause
     exit /b 1
 )
+
+call :detect_ffmpeg
 
 call :test_pip_mirrors
 call :detect_venv
@@ -42,7 +53,9 @@ if errorlevel 1 (
     if errorlevel 1 (
         echo Python not in PATH, searching system...
 
-        if exist "C:\Python3*\python.exe" (
+        if exist "%CD%\.venv\python\python.exe" (
+            set "PYTHON_PATH=%CD%\.venv\python\python.exe"
+        ) else if exist "C:\Python3*\python.exe" (
             for /d %%p in ("C:\Python3*") do set "PYTHON_PATH=%%~dp0python.exe"
         ) else if exist "C:\Program Files\Python3*\python.exe" (
             for /d %%p in ("C:\Program Files\Python3*") do set "PYTHON_PATH=%%~dp0python.exe"
@@ -80,10 +93,11 @@ if errorlevel 1 (
             )
 
             echo     Querying latest Python version...
-            for /f "delims=" %%v in ('curl -s https://www.python.org/ftp/python/ ^| findstr /r "^3\.[0-9]*\.[0-9]*/$" ^| sort /r ^| findstr /n "^" ^| findstr "^[1]:"') do (
-                for /f "tokens=1 delims=/" %%a in ("%%v") do set "PYTHON_LATEST_VERSION=%%a"
+            if not defined PYTHON_LATEST_VERSION (
+                for /f "delims=" %%v in ('curl -s https://www.python.org/ftp/python/ ^| findstr /r "^3\.[0-9]*\.[0-9]*/$" ^| sort /r ^| findstr /n "^" ^| findstr "^[1]:"') do (
+                    for /f "tokens=1 delims=/" %%a in ("%%v") do set "PYTHON_LATEST_VERSION=%%a"
+                )
             )
-            if not defined PYTHON_LATEST_VERSION set "PYTHON_LATEST_VERSION=3.11.9"
             echo     Latest Python version: %PYTHON_LATEST_VERSION%
 
             echo     Downloading Python %PYTHON_LATEST_VERSION% installer...
@@ -92,12 +106,12 @@ if errorlevel 1 (
             )
 
             if exist "%TEMP%\python_installer.exe" (
-                echo     Silently installing Python to %CD%\_python...
-                "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=0 Include_pip=1 TargetDir="%CD%\_python"
-                if exist "%CD%\_python\python.exe" (
-                    set "PYTHON_CMD=%CD%\_python\python.exe"
-                    set "PATH=%CD%\_python;%PATH%"
-                    echo [*] Python installed to: %CD%\_python
+                echo     Silently installing Python to .venv\python...
+                "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=0 Include_pip=1 TargetDir="%CD%\.venv\python"
+                if exist "%CD%\.venv\python\python.exe" (
+                    set "PYTHON_CMD=%CD%\.venv\python\python.exe"
+                    set "PATH=%CD%\.venv\python;%PATH%"
+                    echo [*] Python installed to: .venv\python
                     del "%TEMP%\python_installer.exe" 2>nul
                 ) else (
                     echo [ERROR] Python installation failed
@@ -132,6 +146,120 @@ if defined VIRTUAL_ENV (
 ) else (
     echo Not in virtual environment
     set IN_VENV=0
+)
+exit /b 0
+
+:detect_ffmpeg
+echo.
+echo ========================================
+echo FFmpeg Detection and Installation
+echo ========================================
+
+where ffmpeg >nul 2>&1
+if not errorlevel 1 (
+    echo [*] FFmpeg already installed:
+    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
+    exit /b 0
+)
+
+set "FFMPEG_DIR=%CD%\.venv\ffmpeg"
+if exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
+    echo [*] FFmpeg found in venv: %FFMPEG_DIR%
+    set "PATH=%FFMPEG_DIR%\bin;%PATH%"
+    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
+    exit /b 0
+)
+
+echo FFmpeg not found, auto-installing to .venv...
+echo.
+
+echo [1/3] Testing FFmpeg CDN sources...
+
+set "FFMPEG_CDNS[0]=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip|Gyan.dev"
+set "FFMPEG_CDNS[1]=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip|BtbN"
+set "FFMPEG_CDNS[2]=https://github.com/GyanD/codexffmpeg/releases/download/latest/ffmpeg-release-essentials.zip|CodexFFmpeg"
+
+set "MIN_CDN_TIME=9999"
+set "BEST_CDN_URL="
+set "BEST_CDN_NAME="
+
+for /L %%i in (0,1,2) do (
+    for /f "tokens=1,2 delims=|" %%a in ("!FFMPEG_CDNS[%%i]!") do (
+        set "CDN_URL=%%a"
+        set "CDN_NAME=%%b"
+        echo     Testing !CDN_NAME!...
+
+        curl -s -o nul -w "%%{time_connect}" --connect-timeout 1.5 --max-time 3 "!CDN_URL!" > temp_ffmpeg_time.txt 2>&1
+        set /p CDN_TEST_TIME=<temp_ffmpeg_time.txt
+        del temp_ffmpeg_time.txt 2>nul
+
+        if not defined CDN_TEST_TIME set "CDN_TEST_TIME=9999"
+
+        if "!CDN_TEST_TIME!"=="0" (
+            echo         !CDN_NAME!: timeout/failed
+            set "CDN_TEST_TIME=9999"
+        ) else (
+            for /f "tokens=* delims=" %%t in ('%PYTHON_CMD% -c "print(int(float('!CDN_TEST_TIME!')*1000))"') do set "CDN_INT_TIME=%%t"
+            echo         !CDN_NAME!: !CDN_TEST_TIME!s (!CDN_INT_TIME!ms)
+            if !CDN_INT_TIME! LSS !MIN_CDN_TIME! (
+                set "MIN_CDN_TIME=!CDN_INT_TIME!"
+                set "BEST_CDN_URL=!CDN_URL!"
+                set "BEST_CDN_NAME=!CDN_NAME!"
+            )
+        )
+    )
+)
+
+if "!BEST_CDN_URL!"=="" (
+    echo [WARNING] All FFmpeg CDN sources unreachable
+    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+    exit /b 0
+)
+
+echo.
+echo [*] Fastest FFmpeg CDN: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
+
+set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
+set "FFMPEG_URL=!BEST_CDN_URL!"
+
+echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
+curl -L -o "%FFMPEG_ZIP%" "%FFMPEG_URL%" --connect-timeout 15 --max-time 300 -#
+
+if not exist "%FFMPEG_ZIP%" (
+    echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
+    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+    exit /b 0
+)
+
+echo [3/3] Extracting FFmpeg to .venv...
+if exist "%TEMP%\ffmpeg_extract" rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
+
+%PYTHON_CMD% -c "import zipfile; z=zipfile.ZipFile(r'%FFMPEG_ZIP%'); z.extractall(r'%TEMP%\ffmpeg_extract'); z.close()" 2>nul
+if errorlevel 1 (
+    powershell -Command "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath '%TEMP%\ffmpeg_extract' -Force" 2>nul
+)
+
+for /d %%d in ("%TEMP%\ffmpeg_extract\ffmpeg*") do (
+    if exist "%%d\bin\ffmpeg.exe" (
+        if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
+        move "%%d" "%FFMPEG_DIR%" >nul 2>&1
+        if not exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
+            xcopy "%%d" "%FFMPEG_DIR%" /e /i /y /q >nul 2>&1
+        )
+    )
+)
+
+rd /s /q "%TEMP%\ffmpeg_extract" 2>nul
+del "%FFMPEG_ZIP%" 2>nul
+
+if exist "%FFMPEG_DIR%\bin\ffmpeg.exe" (
+    set "PATH=%FFMPEG_DIR%\bin;%PATH%"
+    echo [*] FFmpeg installed to .venv: %FFMPEG_DIR%\bin\ffmpeg.exe
+    ffmpeg -version 2>nul | findstr /i "ffmpeg version"
+) else (
+    echo [WARNING] FFmpeg installation failed, AC3/EAC3 audio will have no sound in browser
+    echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
+    if exist "%FFMPEG_DIR%" rd /s /q "%FFMPEG_DIR%" 2>nul
 )
 exit /b 0
 
@@ -387,8 +515,14 @@ if not exist ".github\workflows\index.html" (
 )
 
 echo Starting local web server...
+
+for /f "delims=" %%a in ('%PYTHON_CMD% -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.connect(('%LAN_IP_DETECT_HOST%',%LAN_IP_DETECT_PORT%)); ip=s.getsockname()[0]; s.close(); print(ip)" 2^>nul') do set LAN_IP=%%a
+
 echo.
-echo Server URL: http://localhost:8000
+echo   访问地址: http://localhost:%SERVER_PORT%
+if defined LAN_IP (
+    echo   局域网地址: http://%LAN_IP%:%SERVER_PORT%
+)
 echo.
 echo Tips:
 echo    - Press Ctrl+C to stop the server
@@ -400,6 +534,6 @@ echo.
 
 call %VENV_PATH%\Scripts\activate.bat
 cd /d "%~dp0"
-%PYTHON_CMD% "%~dp0server.py" 8000
+%PYTHON_CMD% "%~dp0server.py" %SERVER_PORT%
 pause
 exit /b 0

@@ -39,9 +39,12 @@ def normalize_text_for_match(text: str) -> str:
 
 # 配置
 CONFIG = {
-    "timeout": 3,  # Timeout in seconds
-    "max_parallel": 30,  # Max concurrent requests
-    "output_file": "best_sorted.m3u",  # Output file for the sorted M3U
+    "timeout": int(os.environ.get("IPTV_TIMEOUT", "3")),
+    "max_parallel": int(os.environ.get("IPTV_MAX_PARALLEL", "30")),
+    "output_file": os.environ.get("IPTV_OUTPUT_FILE", "best_sorted.m3u"),
+    "connect_timeout": int(os.environ.get("IPTV_CONNECT_TIMEOUT", "3")),
+    "dns_cache_ttl": int(os.environ.get("IPTV_DNS_CACHE_TTL", "300")),
+    "source_cdn_test_timeout": int(os.environ.get("IPTV_SOURCE_CDN_TIMEOUT", "5")),
 }
 
 CHAR_NORMALIZATION_MAP = str.maketrans({
@@ -213,8 +216,10 @@ SCENIC_EXCLUDE_HINTS = {
 
 # 【修改点 1】去掉 pcas-code 里的 s（街道/乡镇），只使用省、市、区级别的 pca-code.json
 ONLINE_GEO_DATA_URLS = [
-    "https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json",
+    "https://cdn.jsdelivr.net/gh/modood/Administrative-divisions-of-China/dist/pca-code.json",
     "https://fastly.jsdelivr.net/gh/modood/Administrative-divisions-of-China/dist/pca-code.json",
+    "https://raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json",
+    "https://gh-proxy.com/raw.githubusercontent.com/modood/Administrative-divisions-of-China/master/dist/pca-code.json",
 ]
 
 PROVINCE_SUFFIXES = (
@@ -470,21 +475,41 @@ async def load_online_geo_tokens(
     session: aiohttp.ClientSession,
     province_channels: Dict[str, Set[str]]
 ) -> Dict[str, Set[str]]:
+    cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
+    best_url = None
+    best_latency = float('inf')
+    print("Testing geo data CDN sources...")
     for url in ONLINE_GEO_DATA_URLS:
         try:
-            async with session.get(url, timeout=CONFIG["timeout"]) as response:
-                if response.status != 200:
-                    continue
-                raw_text = await response.text(errors="ignore")
-                payload = json.loads(raw_text)
-                tokens = collect_online_geo_tokens(payload, province_channels)
-                if tokens:
-                    total = sum(len(items) for items in tokens.values())
-                    print(f"Loaded {total} online geo tokens from: {url}")
-                    return tokens
-        except Exception:
-            continue
-    return {}
+            start = time.time()
+            async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
+                if resp.status < 400:
+                    latency = time.time() - start
+                    print(f"  {url}: {latency:.3f}s")
+                    if latency < best_latency:
+                        best_latency = latency
+                        best_url = url
+                else:
+                    print(f"  {url}: HTTP {resp.status}")
+        except Exception as e:
+            print(f"  {url}: failed ({type(e).__name__})")
+    if not best_url:
+        print("  All geo CDN sources failed, skipping online geo tokens.")
+        return {}
+    print(f"  Fastest: {best_url} ({best_latency:.3f}s)")
+    try:
+        async with session.get(best_url, timeout=CONFIG["timeout"]) as response:
+            if response.status != 200:
+                return {}
+            raw_text = await response.text(errors="ignore")
+            payload = json.loads(raw_text)
+            tokens = collect_online_geo_tokens(payload, province_channels)
+            if tokens:
+                total = sum(len(items) for items in tokens.values())
+                print(f"Loaded {total} online geo tokens from: {best_url}")
+            return tokens
+    except Exception:
+        return {}
 
 
 def build_province_matchers(province_channels: Dict[str, Set[str]]) -> Dict[str, List[str]]:
@@ -910,6 +935,45 @@ def load_province_channels(files):
     return province_channels
 
 
+async def _select_fastest_source_cdns(source_groups):
+    """对每个 IPTV 源的多个 CDN 镜像做轮询测速，选最快的 URL。"""
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    cdn_timeout = aiohttp.ClientTimeout(total=CONFIG["source_cdn_test_timeout"], connect=2)
+    connector = aiohttp.TCPConnector(limit=10, ttl_dns_cache=CONFIG["dns_cache_ttl"],
+                                     ssl=ssl_context, force_close=True, enable_cleanup_closed=True)
+    selected_urls = []
+    print("Testing IPTV source CDN mirrors...")
+    async with aiohttp.ClientSession(timeout=cdn_timeout, connector=connector) as session:
+        for group in source_groups:
+            name = group["name"]
+            best_url = None
+            best_latency = float('inf')
+            for url in group["urls"]:
+                try:
+                    start = time.time()
+                    async with session.head(url, timeout=cdn_timeout, allow_redirects=True) as resp:
+                        if resp.status < 400:
+                            latency = time.time() - start
+                            print(f"  {name} | {url}: {latency:.3f}s")
+                            if latency < best_latency:
+                                best_latency = latency
+                                best_url = url
+                        else:
+                            print(f"  {name} | {url}: HTTP {resp.status}")
+                except Exception:
+                    print(f"  {name} | {url}: failed")
+            if best_url:
+                selected_urls.append(best_url)
+                print(f"  -> Selected: {best_url} ({best_latency:.3f}s)")
+            else:
+                selected_urls.append(group["urls"][-1])
+                print(f"  -> Fallback: {group['urls'][-1]}")
+    print(f"Selected {len(selected_urls)} source URLs via CDN speed test.")
+    return selected_urls
+
+
 # 主函数：处理多个文件并生成 M3U 输出
 async def main(file_urls, cctv_channel_file, province_channel_files):
     """主函数处理多个文件"""
@@ -924,11 +988,11 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
     all_valid_entries: List[Dict[str, Any]] = []
     semaphore = asyncio.Semaphore(CONFIG["max_parallel"])
 
-    timeout = aiohttp.ClientTimeout(total=CONFIG["timeout"], connect=3)
+    timeout = aiohttp.ClientTimeout(total=CONFIG["timeout"], connect=CONFIG["connect_timeout"])
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
-    connector = aiohttp.TCPConnector(limit=CONFIG["max_parallel"] * 2, ttl_dns_cache=300, ssl=ssl_context,
+    connector = aiohttp.TCPConnector(limit=CONFIG["max_parallel"] * 2, ttl_dns_cache=CONFIG["dns_cache_ttl"], ssl=ssl_context,
                                      force_close=True, enable_cleanup_closed=True)
     async with aiohttp.ClientSession(cookie_jar=None, timeout=timeout, connector=connector) as session:
         online_geo_tokens = await load_online_geo_tokens(session, province_channels)
@@ -959,57 +1023,58 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
 
 
 if __name__ == "__main__":
-    # IPTV 文件 URL（已筛选有效的源）
-    file_urls = [
-        "https://cdn.jsdelivr.net/gh/Guovin/iptv-api@gd/output/result.txt",
-        "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.m3u",
-        "https://raw.githubusercontent.com/suxuang/myIPTV/refs/heads/main/ipv4.m3u",
-        "https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/ipv4/result.m3u",
-        "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8",
+    IPTV_SOURCE_CDNS = [
+        {
+            "name": "Guovin/iptv-api (jsdelivr)",
+            "urls": [
+                "https://cdn.jsdelivr.net/gh/Guovin/iptv-api@gd/output/result.txt",
+                "https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/result.txt",
+            ],
+        },
+        {
+            "name": "vbskycn/iptv (gh-proxy)",
+            "urls": [
+                "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.m3u",
+                "https://raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.m3u",
+            ],
+        },
+        {
+            "name": "suxuang/myIPTV (jsdelivr)",
+            "urls": [
+                "https://cdn.jsdelivr.net/gh/suxuang/myIPTV@main/ipv4.m3u",
+                "https://raw.githubusercontent.com/suxuang/myIPTV/refs/heads/main/ipv4.m3u",
+            ],
+        },
+        {
+            "name": "Guovin/iptv-api ipv4 (jsdelivr)",
+            "urls": [
+                "https://cdn.jsdelivr.net/gh/Guovin/iptv-api@gd/output/ipv4/result.m3u",
+                "https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/ipv4/result.m3u",
+            ],
+        },
+        {
+            "name": "hujingguang/ChinaIPTV (gh-proxy)",
+            "urls": [
+                "https://gh-proxy.com/raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8",
+                "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8",
+            ],
+        },
     ]
 
-    # CCTV 频道文件（例如 IPTV/CCTV.txt）
     cctv_channel_file = ".github/workflows/IPTV/CCTV.txt"
 
-    # 省份频道文件列表
-    province_channel_files = [
-        ".github/workflows/IPTV/重庆频道.txt",
-        ".github/workflows/IPTV/四川频道.txt",
-        ".github/workflows/IPTV/云南频道.txt",
-        ".github/workflows/IPTV/安徽频道.txt",
-        ".github/workflows/IPTV/福建频道.txt",
-        ".github/workflows/IPTV/甘肃频道.txt",
-        ".github/workflows/IPTV/广东频道.txt",
-        ".github/workflows/IPTV/广西频道.txt",
-        ".github/workflows/IPTV/贵州频道.txt",
-        ".github/workflows/IPTV/海南频道.txt",
-        ".github/workflows/IPTV/河北频道.txt",
-        ".github/workflows/IPTV/河南频道.txt",
-        ".github/workflows/IPTV/黑龙江频道.txt",
-        ".github/workflows/IPTV/湖北频道.txt",
-        ".github/workflows/IPTV/湖南频道.txt",
-        ".github/workflows/IPTV/吉林频道.txt",
-        ".github/workflows/IPTV/江苏频道.txt",
-        ".github/workflows/IPTV/江西频道.txt",
-        ".github/workflows/IPTV/辽宁频道.txt",
-        ".github/workflows/IPTV/内蒙频道.txt",
-        ".github/workflows/IPTV/宁夏频道.txt",
-        ".github/workflows/IPTV/青海频道.txt",
-        ".github/workflows/IPTV/山东频道.txt",
-        ".github/workflows/IPTV/山西频道.txt",
-        ".github/workflows/IPTV/陕西频道.txt",
-        ".github/workflows/IPTV/上海频道.txt",
-        ".github/workflows/IPTV/天津频道.txt",
-        ".github/workflows/IPTV/卫视频道.txt",
-        ".github/workflows/IPTV/新疆频道.txt",
-        ".github/workflows/IPTV/浙江频道.txt",
-        ".github/workflows/IPTV/北京频道.txt"
-    ]
+    province_channel_files = []
+    iptv_dir = ".github/workflows/IPTV"
+    if os.path.isdir(iptv_dir):
+        for fname in sorted(os.listdir(iptv_dir)):
+            if fname.endswith("频道.txt"):
+                province_channel_files.append(os.path.join(iptv_dir, fname))
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(script_dir))
     if os.path.isdir(os.path.join(project_root, '.github')):
         os.chdir(project_root)
 
-    # 执行主函数
+    file_urls = asyncio.run(_select_fastest_source_cdns(IPTV_SOURCE_CDNS))
+
     asyncio.run(main(file_urls, cctv_channel_file, province_channel_files))
