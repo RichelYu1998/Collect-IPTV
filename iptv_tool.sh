@@ -289,7 +289,6 @@ run_collection() {
     echo "Tips:"
     echo "   - Use M3U-compatible players to open generated files"
     echo "   - Recommended: VLC, mpv, Kodi, IINA, etc."
-    echo "   - Run with --collect to run IPTV collection only"
     echo ""
 }
 
@@ -350,8 +349,7 @@ setup_scheduled_task_and_web() {
     echo ""
 
     source "$VENV_PATH/bin/activate"
-    cd .github/workflows
-    $PYTHON_CMD -m http.server 8000
+    $PYTHON_CMD server.py 8000
     cd "$WORK_DIR"
 }
 
@@ -377,6 +375,7 @@ main() {
             run_collection
             ;;
         *)
+            run_collection
             setup_scheduled_task_and_web
             ;;
     esac

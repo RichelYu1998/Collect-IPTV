@@ -24,8 +24,9 @@ call :test_pip_mirrors
 call :detect_venv
 call :setup_venv
 
-if "%1"=="--collect" goto run_collection
-goto setup_scheduled_task_and_web
+if "%1"=="--collect" set "COLLECT_ONLY=1" & goto run_collection_only
+set "COLLECT_ONLY=0"
+goto run_collection_and_web
 
 :detect_python_env
 echo.
@@ -260,12 +261,34 @@ if errorlevel 1 (
 echo Python virtual environment setup complete
 exit /b 0
 
-:run_collection
+:run_collection_only
 echo.
 echo ========================================
 echo Running IPTV Collection
 echo ========================================
 
+call :do_collection
+
+echo.
+echo Tips:
+echo    - Use M3U-compatible players to open generated files
+echo    - Recommended: PotPlayer, VLC, Kodi, etc.
+echo.
+if "%COLLECT_ONLY%"=="1" exit /b 0
+pause
+exit /b 0
+
+:run_collection_and_web
+echo.
+echo ========================================
+echo Running IPTV Collection
+echo ========================================
+
+call :do_collection
+
+goto setup_scheduled_task_and_web
+
+:do_collection
 echo [5/5] Checking script files and config...
 
 if not exist ".github\workflows\iptv.py" (
@@ -313,12 +336,6 @@ if exist "best_sorted.m3u8" (
 )
 
 echo.
-echo Tips:
-echo    - Use M3U-compatible players to open generated files
-echo    - Recommended: PotPlayer, VLC, Kodi, etc.
-echo    - Run with --collect to run IPTV collection only
-echo.
-pause
 exit /b 0
 
 :setup_scheduled_task_and_web
@@ -334,25 +351,29 @@ set "SCRIPT_PATH=%~f0"
 set "WORK_DIR=%CD%"
 
 schtasks /query /tn "%TASK_NAME%" >nul 2>&1
-if not errorlevel 1 (
-    echo [*] Scheduled task already exists: %TASK_NAME%
-    schtasks /query /tn "%TASK_NAME%" /fo list | findstr /i "Status Schedule Task"
+if not errorlevel 1 goto task_exists
+
+echo Creating scheduled task: %TASK_NAME%
+echo    Trigger: Every 4 hours
+echo    Command: %SCRIPT_PATH% --collect
+echo    Work dir: %WORK_DIR%
+echo.
+
+schtasks /create /tn "%TASK_NAME%" /tr "\"%SCRIPT_PATH%\" --collect" /sc hourly /mo 4 /f
+
+if errorlevel 1 (
+    echo [WARNING] Failed to create scheduled task via schtasks
+    echo    You can manually create it in Task Scheduler (taskschd.msc)
 ) else (
-    echo Creating scheduled task: %TASK_NAME%
-    echo    Trigger: Every 4 hours
-    echo    Command: %SCRIPT_PATH% --collect
-    echo    Work dir: %WORK_DIR%
-    echo.
-
-    schtasks /create /tn "%TASK_NAME%" /tr "\"%SCRIPT_PATH%\" --collect" /sc hourly /mo 4 /f
-
-    if errorlevel 1 (
-        echo [WARNING] Failed to create scheduled task via schtasks
-        echo    You can manually create it in Task Scheduler (taskschd.msc)
-    ) else (
-        echo [*] Scheduled task created successfully!
-    )
+    echo [*] Scheduled task created successfully!
 )
+goto task_done
+
+:task_exists
+echo [*] Scheduled task already exists: %TASK_NAME%
+schtasks /query /tn "%TASK_NAME%" /fo list | findstr /i "Status Schedule Task"
+
+:task_done
 
 echo.
 echo ========================================
@@ -378,8 +399,7 @@ echo ========================================
 echo.
 
 call %VENV_PATH%\Scripts\activate.bat
-cd .github\workflows
-%PYTHON_CMD% -m http.server 8000
-cd ..\..
+cd /d "%~dp0"
+%PYTHON_CMD% server.py 8000
 pause
 exit /b 0
