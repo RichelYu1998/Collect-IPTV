@@ -302,32 +302,64 @@ def find_ffmpeg():
     path = shutil.which('ffmpeg') or shutil.which('ffmpeg.exe')
     if path:
         return path
+    
     base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    project_ffmpeg = os.path.join(base_dir, 'ffmpeg', 'bin', f'ffmpeg{".exe" if os.name == "nt" else ""}')
+    ext = '.exe' if os.name == 'nt' else ''
+    
+    project_ffmpeg = os.path.join(base_dir, 'ffmpeg', 'bin', f'ffmpeg{ext}')
     if os.path.isfile(project_ffmpeg):
         return project_ffmpeg
 
     if os.name == 'nt':
-        venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', 'ffmpeg.exe')
+        venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', f'ffmpeg{ext}')
         if os.path.isfile(venv_ffmpeg):
             return venv_ffmpeg
         for env_var in ['ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA']:
             base = os.environ.get(env_var, '')
             if base:
-                for sub in [['FFmpeg', 'bin', 'ffmpeg.exe'], ['ffmpeg', 'bin', 'ffmpeg.exe']]:
+                for sub in [['FFmpeg', 'bin', f'ffmpeg{ext}'], ['ffmpeg', 'bin', f'ffmpeg{ext}']]:
                     candidate = os.path.join(base, *sub)
                     if os.path.isfile(candidate):
                         return candidate
         choco = shutil.which('choco')
         if choco:
-            candidate = os.path.join(os.path.dirname(os.path.dirname(choco)), 'bin', 'ffmpeg.exe')
+            candidate = os.path.join(os.path.dirname(os.path.dirname(choco)), 'bin', f'ffmpeg{ext}')
             if os.path.isfile(candidate):
                 return candidate
     else:
         venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', 'ffmpeg')
         if os.path.isfile(venv_ffmpeg):
             return venv_ffmpeg
+        
+        common_paths = [
+            '/usr/local/bin/ffmpeg',
+            '/usr/bin/ffmpeg',
+            '/opt/homebrew/bin/ffmpeg',
+            '/snap/bin/ffmpeg',
+            '/flatpak/ bin/ffmpeg',
+        ]
+        
+        for fp in common_paths:
+            if os.path.isfile(fp):
+                return fp
+                
+        try:
+            result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+            
+        try:
+            result = subprocess.run(['whereis', 'ffmpeg'], capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                paths = result.stdout.split()[1:]
+                for fp in paths:
+                    if os.path.isfile(fp):
+                        return fp
+        except Exception:
+            pass
+            
     return None
 
 
