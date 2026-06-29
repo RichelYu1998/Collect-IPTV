@@ -231,43 +231,14 @@ echo.
 echo [*] Fastest FFmpeg CDN: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
 
 set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
-set "DL_SCRIPT=%TEMP%\ffmpeg_dl.py"
-
-(
-echo import urllib.request, sys, os
-echo url = r'!BEST_CDN_URL!'
-echo dest = r'%FFMPEG_ZIP%'
-echo print('  Downloading to', os.path.basename(dest), '...')
-echo req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-echo resp = urllib.request.urlopen(req, timeout=300)
-echo total = int(resp.headers.get('Content-Length', 0))
-echo with open(dest, 'wb') as f:
-echo     downloaded = 0
-echo     while True:
-echo         chunk = resp.read(81920^)
-echo         if not chunk: break
-echo         f.write(chunk^)
-echo         downloaded += len(chunk^)
-echo         if total ^> 0:
-echo             pct = downloaded * 100 // total
-echo             bar = '#' * (pct // 2) + '-' * (50 - pct // 2^)
-echo             sys.stdout.write('\r  [' + str(bar) + '] ' + str(pct) + '%%'^)
-echo             sys.stdout.flush(^)
-echo print('^)
-echo print('  Download complete!')
-echo resp.close(^)
-) > "!DL_SCRIPT!"
 
 echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
-%PYTHON_CMD% "!DL_SCRIPT!"
+%PYTHON_CMD% "%~dp0_download.py" "!BEST_CDN_URL!" "%FFMPEG_ZIP%"
 if errorlevel 1 (
-    del "!DL_SCRIPT!" 2>nul
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
     echo    You can manually install FFmpeg from: https://ffmpeg.org/download.html
     exit /b 0
 )
-
-del "!DL_SCRIPT!" 2>nul
 
 if not exist "%FFMPEG_ZIP%" (
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
