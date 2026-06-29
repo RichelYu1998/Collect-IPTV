@@ -231,10 +231,14 @@ echo.
 echo [*] Fastest FFmpeg CDN: !BEST_CDN_NAME! (!MIN_CDN_TIME!ms)
 
 set "FFMPEG_ZIP=%TEMP%\ffmpeg-release-essentials.zip"
-set "FFMPEG_URL=!BEST_CDN_URL!"
+set "FFMPEG_URL_FILE=%TEMP%\ffmpeg_url.txt"
+
+echo !BEST_CDN_URL! > "!FFMPEG_URL_FILE!"
 
 echo [2/3] Downloading FFmpeg from !BEST_CDN_NAME!...
-curl -L -o "%FFMPEG_ZIP%" "%FFMPEG_URL%" --connect-timeout 15 --max-time 300 -# --retry 3 --retry-delay 5
+curl -L -o "%FFMPEG_ZIP%" -K NUL --url @"!FFMPEG_URL_FILE!" --connect-timeout 15 --max-time 300 -# --retry 3 --retry-delay 5
+
+del "!FFMPEG_URL_FILE!" 2>nul
 
 if not exist "%FFMPEG_ZIP%" (
     echo [WARNING] FFmpeg download failed, AC3/EAC3 audio will have no sound in browser
