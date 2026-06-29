@@ -352,6 +352,7 @@ call :do_collection
 goto setup_scheduled_task_and_web
 
 :do_collection
+cd /d "%~dp0.."
 echo [5/5] Checking script files and config...
 
 if not exist ".github\workflows\iptv.py" (
