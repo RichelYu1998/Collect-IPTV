@@ -253,6 +253,7 @@ if "!BEST_MIRROR!"=="" (
 exit /b 0
 
 :detect_venv
+cd /d "%~dp0.."
 echo [3/5] Detecting Python virtual environment...
 
 if exist .venv\Scripts\activate.bat (
