@@ -156,8 +156,8 @@ CONFIG = {
 - 后续分片异步提交，不阻塞返回
 - 缓存结构：`preload_cache = {url: {data, ct, ts}}`
 - 淘汰策略：LRU（`preload_order` FIFO）+ TTL（120s）双重淘汰
-- 限制：最大 200 条目 / 300MB
-- 请求进入 `_handle_proxy` 时先查缓存，命中则直接返回（`X-Preload-Hit: 1`）
+- 限制：最大 500 条目 / 500MB
+- 请求进入 `_handle_proxy` 时先查缓存，命中则**流式分块发送**（64KB + flush），不等整个文件写完
 
 ### 4.3 FFmpeg / FFprobe 查找顺序
 
@@ -180,10 +180,10 @@ CONFIG = {
 | `IPTV_TRANSCODE_SESSION_TIMEOUT` | 600 | 转码会话超时（秒） |
 | `IPTV_TRANSCODE_AUDIO_BITRATE` | 128k | 转码音频码率 |
 | `IPTV_MAX_CONTENT_LENGTH` | 50MB | 代理最大内容长度 |
-| `IPTV_PRELOAD_MAX_ENTRIES` | 200 | 预加载缓存最大条目数 |
-| `IPTV_PRELOAD_MAX_SIZE` | 300MB | 预加载缓存最大总内存 |
-| `IPTV_PRELOAD_TTL` | 120 | 预加载缓存过期时间（秒） |
-| `IPTV_PRELOAD_WORKERS` | 4 | 预加载线程池工作线程数 |
+| `IPTV_PRELOAD_MAX_ENTRIES` | 500 | 预加载缓存最大条目数 |
+| `IPTV_PRELOAD_MAX_SIZE` | 500MB | 预加载缓存最大总内存 |
+| `IPTV_PRELOAD_TTL` | 180 | 预加载缓存过期时间（秒） |
+| `IPTV_PRELOAD_WORKERS` | 6 | 预加载线程池工作线程数 |
 | `IPTV_PRELOAD_SYNC_FIRST` | 3 | 同步等待前 N 个分片完成（消除首屏卡顿） |
 
 ---

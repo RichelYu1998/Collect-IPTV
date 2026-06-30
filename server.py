@@ -42,10 +42,10 @@ transcode_lock = threading.Lock()
 audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
 
-PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '200'))
-PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(300 * 1024 * 1024)))
-PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '120'))
-PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '4'))
+PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '500'))
+PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(500 * 1024 * 1024)))
+PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '180'))
+PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '6'))
 PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '3'))
 preload_cache = {}
 preload_order = []
@@ -1123,10 +1123,12 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                 break
             if content_length:
                 self.wfile.write(chunk)
+                self.wfile.flush()
             else:
                 self.wfile.write(f'{len(chunk):x}\r\n'.encode())
                 self.wfile.write(chunk)
                 self.wfile.write(b'\r\n')
+                self.wfile.flush()
 
         if not content_length:
             self.wfile.write(b'0\r\n\r\n')
@@ -1154,7 +1156,13 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Headers', '*')
                 self.send_header('X-Preload-Hit', '1')
                 self.end_headers()
-                self.wfile.write(cached['data'])
+                data = cached['data']
+                off = 0
+                while off < len(data):
+                    chunk = data[off:off + 65536]
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    off += len(chunk)
                 return
 
         try:
