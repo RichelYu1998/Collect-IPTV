@@ -47,6 +47,7 @@ PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(500 * 1024 * 
 PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '180'))
 PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '6'))
 PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '3'))
+PRELOAD_SYNC_ALL = os.environ.get('IPTV_PRELOAD_SYNC_ALL', '').lower() in ('1', 'true', 'yes')
 preload_cache = {}
 preload_order = []
 preload_size = 0
@@ -889,13 +890,13 @@ def preload_segments(urls):
             if url in preload_cache:
                 continue
         pending.append(url)
-    sync_count = min(PRELOAD_SYNC_FIRST, len(pending))
-    sync_futures = []
-    for i, url in enumerate(pending):
-        future = preload_executor.submit(_preload_fetch, url)
-        if i < sync_count:
-            sync_futures.append(future)
-    for f in sync_futures:
+    if not pending:
+        return
+    sync_count = len(pending) if PRELOAD_SYNC_ALL else min(PRELOAD_SYNC_FIRST, len(pending))
+    futures = []
+    for url in pending:
+        futures.append(preload_executor.submit(_preload_fetch, url))
+    for f in futures[:sync_count]:
         try:
             f.result(timeout=PROXY_TIMEOUT)
         except Exception:
