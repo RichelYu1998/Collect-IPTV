@@ -163,40 +163,33 @@ exit /b 0
 :detect_ffmpeg
 echo.
 echo ========================================
-echo FFmpeg Detection and Installation
+echo FFmpeg 检测与安装
 echo ========================================
 
 where ffmpeg >nul 2>&1
 if not errorlevel 1 (
-    echo [*] FFmpeg already installed ^(system^):
-    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
-    goto :eof
-)
-
-if exist "%CD%\ffmpeg\bin\ffmpeg.exe" (
-    echo [*] FFmpeg found: %CD%\ffmpeg
-    set "PATH=%CD%\ffmpeg\bin;%PATH%"
+    echo [*] FFmpeg 已安装 ^(系统^):
     ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
     goto :eof
 )
 
 if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
-    echo [*] FFmpeg found in venv: %CD%\.venv\ffmpeg
+    echo [*] 在虚拟环境中找到 FFmpeg: %CD%\.venv\ffmpeg
     set "PATH=%CD%\.venv\ffmpeg\bin;%PATH%"
     ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
     goto :eof
 )
 
-echo [*] Running cross-platform FFmpeg setup...
+echo [*] 正在通过跨平台安装工具安装 FFmpeg...
 %PYTHON_CMD% "%~dp0..\server.py" --setup-ffmpeg
 if errorlevel 1 (
-    echo [WARNING] FFmpeg auto-install failed, AC3/EAC3 audio will have no sound in browser
+    echo [警告] FFmpeg 自动安装失败，浏览器中 AC3/EAC3 音频将无声音
     goto :eof
 )
 
-if exist "%CD%\ffmpeg\bin\ffmpeg.exe" (
-    set "PATH=%CD%\ffmpeg\bin;%PATH%"
-    echo [*] FFmpeg installed successfully:
+if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
+    set "PATH=%CD%\.venv\ffmpeg\bin;%PATH%"
+    echo [*] FFmpeg 安装成功:
     ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
     goto :eof
 )

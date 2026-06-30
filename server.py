@@ -41,7 +41,7 @@ audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
 
 PROJECT_ROOT = Path(__file__).parent
-FFMPEG_INSTALL_DIR = PROJECT_ROOT / 'ffmpeg'
+FFMPEG_INSTALL_DIR = PROJECT_ROOT / '.venv' / 'ffmpeg'
 
 M3U8_CONTENT_TYPES = (
     'application/vnd.apple.mpegurl',
@@ -81,6 +81,7 @@ def detect_os():
 def check_ffmpeg_installed():
     os_info = detect_os()
     ffmpeg_path = FFMPEG_INSTALL_DIR / 'bin' / f'ffmpeg{os_info["ext"]}'
+    ffprobe_path = FFMPEG_INSTALL_DIR / 'bin' / f'ffprobe{os_info["ext"]}'
     if ffmpeg_path.exists():
         try:
             result = subprocess.run(
@@ -93,6 +94,12 @@ def check_ffmpeg_installed():
                 version = result.stdout.split('\n')[0]
                 print(f"[*] FFmpeg already installed: {version}")
                 print(f"    Location: {ffmpeg_path}")
+                if ffprobe_path.exists():
+                    print(f"[*] FFprobe already installed")
+                    print(f"    Location: {ffprobe_path}")
+                else:
+                    print(f"[!] FFprobe 缺失，需要补充安装")
+                    return False
                 return True
         except:
             pass
@@ -109,6 +116,88 @@ def download_file(url, dest_path):
     except Exception as e:
         print(f"    Download failed: {e}")
         return False
+
+
+def _install_ffprobe_only(os_info, current_os):
+    dest_dir = FFMPEG_INSTALL_DIR / 'bin'
+    ffprobe_name = f'ffprobe{os_info["ext"]}'
+
+    sources = FFMPEG_CDNS.get(current_os, [])
+    for source in sources:
+        ffprobe_url = source.get('ffprobe_url')
+        if ffprobe_url:
+            print(f"    从 {source['name']} 下载 ffprobe...")
+            temp_download = PROJECT_ROOT / '_temp_ffprobe_download'
+            temp_extract = PROJECT_ROOT / '_temp_ffprobe_extract'
+            try:
+                temp_download.mkdir(parents=True, exist_ok=True)
+                temp_extract.mkdir(parents=True, exist_ok=True)
+                if download_file(ffprobe_url, temp_download / 'ffprobe_archive'):
+                    probe_result = extract_zip_mac(temp_download / 'ffprobe_archive', temp_extract)
+                    if probe_result:
+                        probe_src = Path(probe_result)
+                        probe_dst = dest_dir / ffprobe_name
+                        shutil.copy2(str(probe_src), str(probe_dst))
+                        if os.name != 'nt':
+                            os.chmod(str(probe_dst), 0o755)
+                        print(f"    已安装: {probe_dst}")
+                        return True
+                    else:
+                        for root, dirs, files in os.walk(str(temp_extract)):
+                            for f in files:
+                                if f == ffprobe_name:
+                                    src_p = Path(root) / f
+                                    dst_p = dest_dir / ffprobe_name
+                                    shutil.copy2(str(src_p), str(dst_p))
+                                    if os.name != 'nt':
+                                        os.chmod(str(dst_p), 0o755)
+                                    print(f"    已安装: {dst_p}")
+                                    return True
+            except Exception as e:
+                print(f"    ffprobe 下载/解压失败: {e}")
+            finally:
+                if temp_download.exists():
+                    shutil.rmtree(temp_download, ignore_errors=True)
+                if temp_extract.exists():
+                    shutil.rmtree(temp_extract, ignore_errors=True)
+
+        ffprobe_pkg = source.get('npm_ffprobe_pkg')
+        if ffprobe_pkg:
+            npm = shutil.which('npm')
+            if npm:
+                print(f"    通过 npm 淘宝镜像安装 {ffprobe_pkg}...")
+                temp_dir = PROJECT_ROOT / '_temp_ffprobe_npm'
+                try:
+                    if temp_dir.exists():
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                    temp_dir.mkdir(parents=True, exist_ok=True)
+                    env = os.environ.copy()
+                    subprocess.run([npm, 'init', '-y'], cwd=str(temp_dir), capture_output=True, text=True, timeout=30, env=env)
+                    result = subprocess.run(
+                        [npm, 'install', ffprobe_pkg, '--registry=https://registry.npmmirror.com'],
+                        cwd=str(temp_dir), capture_output=True, text=True, timeout=120, env=env,
+                    )
+                    if result.returncode == 0:
+                        for root, dirs, files in os.walk(str(temp_dir)):
+                            for f in files:
+                                if f == ffprobe_name:
+                                    src_p = os.path.join(root, f)
+                                    dst_p = dest_dir / ffprobe_name
+                                    shutil.copy2(src_p, str(dst_p))
+                                    if os.name != 'nt':
+                                        os.chmod(str(dst_p), 0o755)
+                                    print(f"    已安装: {dst_p}")
+                                    return True
+                    else:
+                        print(f"    npm 安装 ffprobe 失败: {result.stderr[:200]}")
+                except Exception as e:
+                    print(f"    npm 安装 ffprobe 异常: {e}")
+                finally:
+                    if temp_dir.exists():
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    print("    FFprobe 补充安装失败")
+    return False
 
 
 def extract_zip_generic(filepath, dest):
@@ -161,159 +250,405 @@ def install_via_package_manager(cmd, name):
         return False
 
 
+FFMPEG_CDNS = {
+    'windows': [
+        {
+            'name': 'npm 淘宝镜像 (ffmpeg-static + ffprobe)',
+            'npm_pkg': 'ffmpeg-static',
+            'npm_bin': 'ffmpeg',
+            'npm_ffprobe_pkg': '@ffprobe-installer/ffprobe',
+        },
+        {
+            'name': 'Gyan.dev (官方)',
+            'url': 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
+        },
+        {
+            'name': 'BtbN GitHub',
+            'url': None,
+            'url_tpl': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{arch}-gpl.zip',
+        },
+    ],
+    'mac': [
+        {
+            'name': 'npm 淘宝镜像 (ffmpeg-static + ffprobe)',
+            'npm_pkg': 'ffmpeg-static',
+            'npm_bin': 'ffmpeg',
+            'npm_ffprobe_pkg': '@ffprobe-installer/ffprobe',
+        },
+        {
+            'name': 'evermeet.cx (官方)',
+            'url': 'https://evermeet.cx/ffmpeg/getrelease/zip',
+            'ffprobe_url': 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip',
+        },
+    ],
+    'linux': [
+        {
+            'name': 'npm 淘宝镜像 (ffmpeg-static + ffprobe)',
+            'npm_pkg': 'ffmpeg-static',
+            'npm_bin': 'ffmpeg',
+            'npm_ffprobe_pkg': '@ffprobe-installer/ffprobe',
+        },
+        {
+            'name': 'BtbN GitHub',
+            'url': None,
+            'url_tpl': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{arch}-gpl.tar.xz',
+        },
+    ],
+}
+
+
 def setup_ffmpeg():
     print("=" * 60)
-    print("FFmpeg Setup Tool")
+    print("FFmpeg 安装工具")
     print("=" * 60)
 
     os_info = detect_os()
-    print(f"\n[*] Detected OS: {os_info['os'].upper()} ({os_info['arch']})")
+    current_os = os_info['os']
+    print(f"\n[*] 检测到系统: {current_os.upper()} ({os_info['arch']})")
 
     if check_ffmpeg_installed():
-        print("\nFFmpeg is ready to use!")
+        print("\nFFmpeg 已就绪！")
         return True
 
-    print(f"\n[*] FFmpeg will be installed to: {FFMPEG_INSTALL_DIR}")
+    ffmpeg_bin = FFMPEG_INSTALL_DIR / 'bin' / f'ffmpeg{os_info["ext"]}'
+    ffprobe_bin = FFMPEG_INSTALL_DIR / 'bin' / f'ffprobe{os_info["ext"]}'
+    if ffmpeg_bin.exists() and not ffprobe_bin.exists():
+        print(f"\n[*] FFmpeg 已安装但 FFprobe 缺失，尝试补充安装 FFprobe...")
+        if _install_ffprobe_only(os_info, current_os):
+            return check_ffmpeg_installed()
 
-    sources = []
+    print(f"\n[*] FFmpeg 将安装到: {FFMPEG_INSTALL_DIR}")
 
-    if os_info['os'] == 'windows':
-        sources = [
-            {
-                'name': 'Gyan.dev (Official)',
-                'url': 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip',
-                'extract_func': extract_zip_windows
-            },
-            {
-                'name': 'BtbN (GitHub)',
-                'url': f'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-{os_info["arch"]}-gpl.zip',
-                'extract_func': extract_zip_generic
-            }
-        ]
-    elif os_info['os'] == 'mac':
-        sources = [
-            {
-                'name': 'evermeet.cx',
-                'url': 'https://evermeet.cx/ffmpeg/getrelease/zip',
-                'extract_func': extract_zip_mac
-            },
-            {
-                'name': 'Homebrew',
-                'url': None,
-                'install_cmd': ['brew', 'install', 'ffmpeg']
-            }
-        ]
-    elif os_info['os'] == 'linux':
+    sources = FFMPEG_CDNS.get(current_os, [])
+
+    pkg_managers = []
+    if current_os == 'mac':
+        if shutil.which('brew'):
+            pkg_managers.append({'name': 'Homebrew', 'cmd': ['brew', 'install', 'ffmpeg']})
+    elif current_os == 'linux':
         if shutil.which('apt-get'):
-            sources.append({
-                'name': 'APT (Ubuntu/Debian)',
-                'url': None,
-                'install_cmd': ['sudo', 'apt-get', 'update', '&&', 'sudo', 'apt-get', 'install', '-y', 'ffmpeg']
-            })
-        elif shutil.which('dnf'):
-            sources.append({
-                'name': 'DNF (Fedora)',
-                'url': None,
-                'install_cmd': ['sudo', 'dnf', 'install', '-y', 'ffmpeg']
-            })
-        elif shutil.which('yum'):
-            sources.append({
-                'name': 'YUM (CentOS/RHEL)',
-                'url': None,
-                'install_cmd': ['sudo', 'yum', 'install', '-y', 'ffmpeg']
-            })
-        elif shutil.which('pacman'):
-            sources.append({
-                'name': 'Pacman (Arch)',
-                'url': None,
-                'install_cmd': ['sudo', 'pacman', '-S', '--noconfirm', 'ffmpeg']
-            })
+            pkg_managers.append({'name': 'APT (Ubuntu/Debian)', 'cmd': ['sudo', 'apt-get', 'update', '&&', 'sudo', 'apt-get', 'install', '-y', 'ffmpeg']})
+        if shutil.which('dnf'):
+            pkg_managers.append({'name': 'DNF (Fedora)', 'cmd': ['sudo', 'dnf', 'install', '-y', 'ffmpeg']})
+        if shutil.which('yum'):
+            pkg_managers.append({'name': 'YUM (CentOS/RHEL)', 'cmd': ['sudo', 'yum', 'install', '-y', 'ffmpeg']})
+        if shutil.which('pacman'):
+            pkg_managers.append({'name': 'Pacman (Arch)', 'cmd': ['sudo', 'pacman', '-S', '--noconfirm', 'ffmpeg']})
+        if shutil.which('apk'):
+            pkg_managers.append({'name': 'APK (Alpine)', 'cmd': ['sudo', 'apk', 'add', 'ffmpeg']})
 
     success = False
+    total = len(sources) + len(pkg_managers)
+    step = 0
 
-    for i, source in enumerate(sources, 1):
-        print(f"\n{'='*60}")
-        print(f"[{i}/{len(sources)}] Trying: {source['name']}")
+    for source in sources:
+        step += 1
+        print(f"\n{'=' * 60}")
+        print(f"[{step}/{total}] 尝试: {source['name']}")
         print('=' * 60)
 
-        if source.get('install_cmd'):
-            if install_via_package_manager(source['install_cmd'], source['name']):
+        if source.get('npm_pkg'):
+            if _install_ffmpeg_via_npm(source):
                 success = True
                 break
             continue
 
-        if not source.get('url'):
+        url = source.get('url')
+        if not url and source.get('url_tpl'):
+            arch_map = {
+                'win64': 'win64-gpl',
+                'winarm64': 'winarm64-gpl',
+                'win32': 'win32-gpl',
+                'linux_x64': 'linux64-gpl',
+                'linux_arm64': 'linuxarm64-gpl',
+                'mac_arm64': 'macos64-arm64-gpl',
+                'mac_x64': 'macos64-gpl',
+            }
+            mapped = arch_map.get(os_info['arch'], os_info['arch'])
+            url = source['url_tpl'].format(arch=mapped)
+
+        if not url:
             continue
 
-        temp_download = PROJECT_ROOT / '_temp_ffmpeg.zip'
+        temp_download = PROJECT_ROOT / '_temp_ffmpeg_download'
         temp_extract = PROJECT_ROOT / '_temp_ffmpeg_extract'
-
-        if os.path.exists(temp_extract):
+        if temp_extract.exists():
             shutil.rmtree(temp_extract, ignore_errors=True)
+        temp_download.mkdir(parents=True, exist_ok=True)
 
-        if download_file(source['url'], temp_download):
-            extract_func = source.get('extract_func')
-            if extract_func and callable(extract_func):
-                try:
-                    result = extract_func(temp_download, temp_extract)
-                    if result:
-                        if os_info['os'] != 'mac':
-                            src = Path(result)
-                            dst = FFMPEG_INSTALL_DIR
-                            if dst.exists():
-                                shutil.rmtree(dst)
-                            shutil.move(src, dst)
-                        success = True
-                        break
-                except Exception as e:
-                    print(f"  ✗ Extraction failed: {e}")
+        if download_file(url, temp_download / 'ffmpeg_archive'):
+            extract_func = extract_zip_generic
+            if url.endswith('.tar.xz') or url.endswith('.tar.gz'):
+                extract_func = extract_tar
+            elif current_os == 'mac':
+                extract_func = extract_zip_mac
+
+            try:
+                result = extract_func(temp_download / 'ffmpeg_archive', temp_extract)
+                if result:
+                    _move_ffmpeg_to_install_dir(result, temp_extract, os_info)
+
+                    ffprobe_url = source.get('ffprobe_url')
+                    if ffprobe_url and not (FFMPEG_INSTALL_DIR / 'bin' / f'ffprobe{os_info["ext"]}').exists():
+                        print(f"\n    正在下载 ffprobe...")
+                        temp_extract_ffprobe = PROJECT_ROOT / '_temp_ffmpeg_extract_ffprobe'
+                        if temp_extract_ffprobe.exists():
+                            shutil.rmtree(temp_extract_ffprobe, ignore_errors=True)
+                        temp_extract_ffprobe.mkdir(parents=True, exist_ok=True)
+                        if download_file(ffprobe_url, temp_download / 'ffprobe_archive'):
+                            try:
+                                probe_result = extract_zip_mac(temp_download / 'ffprobe_archive', temp_extract_ffprobe)
+                                if probe_result:
+                                    probe_src = Path(probe_result)
+                                    probe_dst = FFMPEG_INSTALL_DIR / 'bin' / f'ffprobe{os_info["ext"]}'
+                                    shutil.copy2(str(probe_src), str(probe_dst))
+                                    if os.name != 'nt':
+                                        os.chmod(str(probe_dst), 0o755)
+                                    print(f"    已安装: {probe_dst}")
+                                else:
+                                    for root, dirs, files in os.walk(str(temp_extract_ffprobe)):
+                                        for f in files:
+                                            if f == f'ffprobe{os_info["ext"]}':
+                                                src_p = Path(root) / f
+                                                dst_p = FFMPEG_INSTALL_DIR / 'bin' / f
+                                                shutil.copy2(str(src_p), str(dst_p))
+                                                if os.name != 'nt':
+                                                    os.chmod(str(dst_p), 0o755)
+                                                print(f"    已安装: {dst_p}")
+                                                break
+                            except Exception as e:
+                                print(f"    ffprobe 解压失败: {e}")
+                            finally:
+                                if temp_extract_ffprobe.exists():
+                                    shutil.rmtree(temp_extract_ffprobe, ignore_errors=True)
+
+                    success = True
+                    break
+            except Exception as e:
+                print(f"    解压失败: {e}")
 
         if temp_download.exists():
-            os.remove(temp_download)
+            shutil.rmtree(temp_download, ignore_errors=True)
 
-    if os.path.exists(PROJECT_ROOT / '_temp_ffmpeg_extract'):
+    if not success:
+        for pm in pkg_managers:
+            step += 1
+            print(f"\n{'=' * 60}")
+            print(f"[{step}/{total}] 尝试: {pm['name']}")
+            print('=' * 60)
+            if install_via_package_manager(pm['cmd'], pm['name']):
+                if shutil.which('ffmpeg'):
+                    success = True
+                    break
+
+    if PROJECT_ROOT.exists() and (PROJECT_ROOT / '_temp_ffmpeg_extract').exists():
         shutil.rmtree(PROJECT_ROOT / '_temp_ffmpeg_extract', ignore_errors=True)
+    if PROJECT_ROOT.exists() and (PROJECT_ROOT / '_temp_ffmpeg_download').exists():
+        shutil.rmtree(PROJECT_ROOT / '_temp_ffmpeg_download', ignore_errors=True)
 
     if success:
         print("\n" + "=" * 60)
-        print("[*] FFmpeg installation completed successfully!")
+        print("[*] FFmpeg 安装成功！")
         print("=" * 60)
         return check_ffmpeg_installed()
     else:
         print("\n" + "=" * 60)
-        print("[!] All installation methods failed")
+        print("[!] 所有安装方式均失败")
         print("=" * 60)
-        print("\nManual installation options:")
-        if os_info['os'] == 'windows':
-            print("  1. Download from https://www.gyan.dev/ffmpeg/builds/")
-            print(f"  2. Extract to: {FFMPEG_INSTALL_DIR}")
-        elif os_info['os'] == 'mac':
-            print("  1. Install Homebrew: https://brew.sh/")
-            print("  2. Run: brew install ffmpeg")
-        elif os_info['os'] == 'linux':
-            print("  1. Use your package manager:")
+        print("\n手动安装方式:")
+        if current_os == 'windows':
+            print("  1. 下载: https://www.gyan.dev/ffmpeg/builds/")
+            print(f"  2. 解压到: {FFMPEG_INSTALL_DIR}")
+        elif current_os == 'mac':
+            print("  1. 安装 Homebrew: https://brew.sh/")
+            print("  2. 运行: brew install ffmpeg")
+        elif current_os == 'linux':
+            print("  1. 使用包管理器:")
             print("     Ubuntu/Debian: sudo apt install ffmpeg")
             print("     Fedora: sudo dnf install ffmpeg")
             print("     Arch: sudo pacman -S ffmpeg")
         return False
 
 
+def _install_ffmpeg_via_npm(source):
+    npm = shutil.which('npm')
+    if not npm:
+        print("    npm 未安装，跳过此方式")
+        return False
+
+    npm_pkg = source['npm_pkg']
+    npm_bin_name = source.get('npm_bin', 'ffmpeg')
+
+    temp_dir = PROJECT_ROOT / '_temp_ffmpeg_npm'
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        print(f"    通过 npm 淘宝镜像安装 {npm_pkg}...")
+        env = os.environ.copy()
+        if npm_pkg == 'ffmpeg-static':
+            env['FFMPEG_BINARIES_URL'] = 'https://cdn.npmmirror.com/binaries/ffmpeg-static'
+
+        result = subprocess.run(
+            [npm, 'init', '-y'],
+            cwd=str(temp_dir),
+            capture_output=True, text=True, timeout=30,
+            env=env,
+        )
+
+        result = subprocess.run(
+            [npm, 'install', npm_pkg, '--registry=https://registry.npmmirror.com'],
+            cwd=str(temp_dir),
+            capture_output=True, text=True, timeout=120,
+            env=env,
+        )
+
+        if result.returncode != 0:
+            print(f"    npm 安装失败: {result.stderr[:200]}")
+            return False
+
+        ffmpeg_found = None
+        for root, dirs, files in os.walk(str(temp_dir)):
+            for f in files:
+                if f == npm_bin_name or f == npm_bin_name + '.exe':
+                    candidate = os.path.join(root, f)
+                    try:
+                        test = subprocess.run(
+                            [candidate, '-version'],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        if test.returncode == 0:
+                            ffmpeg_found = candidate
+                            break
+                    except Exception:
+                        pass
+            if ffmpeg_found:
+                break
+
+        if not ffmpeg_found:
+            print("    npm 安装完成但未找到可执行的 ffmpeg")
+            return False
+
+        dest_dir = FFMPEG_INSTALL_DIR / 'bin'
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        os_info = detect_os()
+        dest_file = dest_dir / f'ffmpeg{os_info["ext"]}'
+        shutil.copy2(ffmpeg_found, str(dest_file))
+        if os.name != 'nt':
+            os.chmod(str(dest_file), 0o755)
+
+        print(f"    已复制: {dest_file}")
+
+        ffprobe_name = 'ffprobe' + os_info['ext']
+        for root, dirs, files in os.walk(str(temp_dir)):
+            for f in files:
+                if f == ffprobe_name:
+                    src = os.path.join(root, f)
+                    dst = dest_dir / ffprobe_name
+                    shutil.copy2(src, str(dst))
+                    if os.name != 'nt':
+                        os.chmod(str(dst), 0o755)
+                    print(f"    已复制: {dst}")
+                    break
+
+        ffprobe_pkg = source.get('npm_ffprobe_pkg')
+        if ffprobe_pkg and not (dest_dir / ffprobe_name).exists():
+            print(f"    通过 npm 淘宝镜像安装 {ffprobe_pkg}...")
+            result = subprocess.run(
+                [npm, 'install', ffprobe_pkg, '--registry=https://registry.npmmirror.com'],
+                cwd=str(temp_dir),
+                capture_output=True, text=True, timeout=120,
+                env=env,
+            )
+            if result.returncode == 0:
+                for root, dirs, files in os.walk(str(temp_dir)):
+                    for f in files:
+                        if f == ffprobe_name:
+                            src = os.path.join(root, f)
+                            dst = dest_dir / ffprobe_name
+                            shutil.copy2(src, str(dst))
+                            if os.name != 'nt':
+                                os.chmod(str(dst), 0o755)
+                            print(f"    已复制: {dst}")
+                            break
+                    if (dest_dir / ffprobe_name).exists():
+                        break
+            else:
+                print(f"    ffprobe npm 安装失败: {result.stderr[:200]}")
+
+        return True
+
+    except subprocess.TimeoutExpired:
+        print("    npm 安装超时")
+        return False
+    except Exception as e:
+        print(f"    npm 安装异常: {e}")
+        return False
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def extract_tar(filepath, dest):
+    filepath = Path(filepath)
+    try:
+        if str(filepath).endswith('.tar.xz'):
+            import lzma
+            with lzma.open(str(filepath), 'rb') as f:
+                with tarfile.open(fileobj=f) as tar:
+                    tar.extractall(path=str(dest))
+        elif str(filepath).endswith('.tar.gz'):
+            with tarfile.open(str(filepath), 'r:gz') as tar:
+                tar.extractall(path=str(dest))
+        else:
+            with tarfile.open(str(filepath), 'r') as tar:
+                tar.extractall(path=str(dest))
+        for root, dirs, files in os.walk(str(dest)):
+            for f in files:
+                if f == 'ffmpeg' or f == 'ffmpeg.exe':
+                    return os.path.join(root, f)
+        return None
+    except Exception as e:
+        print(f"    解压失败: {e}")
+        return None
+
+
+def _move_ffmpeg_to_install_dir(extracted_path, temp_extract, os_info):
+    src = Path(extracted_path)
+    dest_dir = FFMPEG_INSTALL_DIR / 'bin'
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f'ffmpeg{os_info["ext"]}'
+    shutil.copy2(str(src), str(dest))
+    if os.name != 'nt':
+        os.chmod(str(dest), 0o755)
+    print(f"    已安装: {dest}")
+
+    for root, dirs, files in os.walk(str(temp_extract)):
+        for f in files:
+            if f == f'ffprobe{os_info["ext"]}':
+                src_probe = Path(root) / f
+                dst_probe = dest_dir / f
+                shutil.copy2(str(src_probe), str(dst_probe))
+                if os.name != 'nt':
+                    os.chmod(str(dst_probe), 0o755)
+                print(f"    已安装: {dst_probe}")
+                break
+
+
 def find_ffmpeg():
     path = shutil.which('ffmpeg') or shutil.which('ffmpeg.exe')
     if path:
         return path
-    
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     ext = '.exe' if os.name == 'nt' else ''
-    
-    project_ffmpeg = os.path.join(base_dir, 'ffmpeg', 'bin', f'ffmpeg{ext}')
-    if os.path.isfile(project_ffmpeg):
-        return project_ffmpeg
+
+    venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', f'ffmpeg{ext}')
+    if os.path.isfile(venv_ffmpeg):
+        return venv_ffmpeg
 
     if os.name == 'nt':
-        venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', f'ffmpeg{ext}')
-        if os.path.isfile(venv_ffmpeg):
-            return venv_ffmpeg
         for env_var in ['ProgramFiles', 'ProgramFiles(x86)', 'LOCALAPPDATA']:
             base = os.environ.get(env_var, '')
             if base:
@@ -327,17 +662,13 @@ def find_ffmpeg():
             if os.path.isfile(candidate):
                 return candidate
     else:
-        venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', 'ffmpeg')
-        if os.path.isfile(venv_ffmpeg):
-            return venv_ffmpeg
-        
         common_paths = [
             '/usr/local/bin/ffmpeg',
             '/usr/bin/ffmpeg',
             '/snap/bin/ffmpeg',
             '/flatpak/bin/ffmpeg',
         ]
-        
+
         homebrew_prefix = os.environ.get('HOMEBREW_PREFIX', '')
         if homebrew_prefix and os.path.isdir(homebrew_prefix):
             homebrew_bin = os.path.join(homebrew_prefix, 'bin', 'ffmpeg')
@@ -345,7 +676,7 @@ def find_ffmpeg():
                 common_paths.insert(3, homebrew_bin)
         elif os.path.isdir('/opt/homebrew'):
             common_paths.append('/opt/homebrew/bin/ffmpeg')
-            
+
         for fp in common_paths:
             if os.path.isfile(fp):
                 return fp
@@ -387,48 +718,95 @@ def find_ffprobe():
 
 def probe_audio_info(url):
     ffprobe_path = find_ffprobe()
-    if not ffprobe_path:
-        return {'has_audio': None, 'error': 'no_ffprobe'}
 
-    cmd = [
-        ffprobe_path,
-        '-v', 'quiet',
-        '-print_format', 'json',
-        '-show_streams',
-        '-select_streams', 'a',
-        '-analyzeduration', '5000000',
-        '-probesize', '5000000',
-        '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        url,
-    ]
+    if ffprobe_path:
+        cmd = [
+            ffprobe_path,
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_streams',
+            '-select_streams', 'a',
+            '-analyzeduration', '5000000',
+            '-probesize', '5000000',
+            '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            url,
+        ]
 
-    try:
-        kwargs = {
-            'capture_output': True,
-            'text': True,
-            'timeout': 15,
-        }
-        if os.name == 'nt':
-            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
-        result = subprocess.run(cmd, **kwargs)
-        data = json.loads(result.stdout)
-        streams = data.get('streams', [])
-        if not streams:
-            return {'has_audio': False, 'codecs': [], 'unsupported': []}
-        codecs = []
-        unsupported = []
-        for s in streams:
-            codec = s.get('codec_name', 'unknown')
-            codecs.append(codec)
-            if codec in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
-                unsupported.append(codec)
-        return {'has_audio': True, 'codecs': codecs, 'unsupported': unsupported}
-    except subprocess.TimeoutExpired:
-        return {'has_audio': None, 'error': 'timeout'}
-    except json.JSONDecodeError:
-        return {'has_audio': None, 'error': 'parse_error'}
-    except Exception as e:
-        return {'has_audio': None, 'error': str(e)}
+        try:
+            kwargs = {
+                'capture_output': True,
+                'text': True,
+                'timeout': 15,
+            }
+            if os.name == 'nt':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+            result = subprocess.run(cmd, **kwargs)
+            data = json.loads(result.stdout)
+            streams = data.get('streams', [])
+            if not streams:
+                return {'has_audio': False, 'codecs': [], 'unsupported': []}
+            codecs = []
+            unsupported = []
+            for s in streams:
+                codec = s.get('codec_name', 'unknown')
+                codecs.append(codec)
+                if codec in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                    unsupported.append(codec)
+            return {'has_audio': True, 'codecs': codecs, 'unsupported': unsupported}
+        except subprocess.TimeoutExpired:
+            return {'has_audio': None, 'error': 'timeout'}
+        except json.JSONDecodeError:
+            pass
+        except Exception:
+            pass
+
+    if FFMPEG_PATH:
+        cmd = [
+            FFMPEG_PATH,
+            '-i', url,
+            '-hide_banner',
+            '-t', '0',
+            '-f', 'null',
+            '-',
+        ]
+
+        try:
+            kwargs = {
+                'capture_output': True,
+                'text': True,
+                'timeout': 15,
+            }
+            if os.name == 'nt':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+            result = subprocess.run(cmd, **kwargs)
+            stderr = result.stderr
+            codecs = []
+            unsupported = []
+            has_audio = False
+
+            audio_section = False
+            for line in stderr.split('\n'):
+                if 'Audio:' in line:
+                    has_audio = True
+                    audio_section = True
+                    parts = line.split('Audio:')[1].strip()
+                    codec_part = parts.split(',')[0].strip().split(' ')[0]
+                    codecs.append(codec_part)
+                    if codec_part in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                        unsupported.append(codec_part)
+
+            if has_audio:
+                return {'has_audio': True, 'codecs': codecs, 'unsupported': unsupported}
+            elif 'Stream #' in stderr and 'Video:' in stderr:
+                return {'has_audio': False, 'codecs': [], 'unsupported': []}
+            else:
+                return {'has_audio': None, 'error': 'probe_failed'}
+        except subprocess.TimeoutExpired:
+            return {'has_audio': None, 'error': 'timeout'}
+        except Exception as e:
+            return {'has_audio': None, 'error': str(e)}
+
+    return {'has_audio': None, 'error': 'no_ffprobe'}
 
 
 def probe_audio_cached(url):

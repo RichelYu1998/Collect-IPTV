@@ -25,7 +25,7 @@
 │   ├── best_sorted.m3u          # 采集输出
 │   ├── best_sorted.m3u8         # 采集输出
 │   └── .cdn_cache.json          # CDN 缓存
-├── ffmpeg/                      # FFmpeg 二进制（自动下载）
+├── ffmpeg/                      # FFmpeg 二进制（自动下载，含 ffmpeg + ffprobe）
 ├── .venv/                       # Python 虚拟环境（自动创建）
 ├── README.md                    # 项目文档（含版本号）
 ├── skill.md                     # 代码规范文档（本文件）
@@ -103,13 +103,17 @@ CONFIG = {
 }
 ```
 
-### 3.2 FFmpeg 管理
+### 3.2 FFmpeg + FFprobe 管理
 
 - 优先检测系统 PATH 中的 ffmpeg
-- 其次检测项目目录 `ffmpeg/bin/ffmpeg`
+- 其次检测项目目录 `ffmpeg/bin/`
 - macOS 优先通过 Homebrew 安装
 - Linux 通过各包管理器安装
 - Windows 通过下载静态二进制
+- **FFprobe 必须与 FFmpeg 一起安装**，否则无法探测 AC3/EAC3 等音频编码
+- macOS evermeet.cx 源需单独下载 ffprobe：`https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip`
+- npm `ffmpeg-static` 包不含 ffprobe，需额外安装 `@ffprobe-installer/ffprobe`
+- 如果检测到 FFmpeg 已安装但 FFprobe 缺失，自动触发补充安装（`_install_ffprobe_only`）
 
 ### 3.3 缓存机制
 
@@ -137,13 +141,17 @@ CONFIG = {
 | `/transcode/` | 音频转码，AC3/EAC3 → AAC |
 | `/tstream/` | 转码流管理，HLS 分片 |
 
-### 4.2 FFmpeg 查找顺序
+### 4.2 FFmpeg / FFprobe 查找顺序
 
 1. 系统 PATH（`shutil.which`）
 2. 项目目录 `ffmpeg/bin/`
 3. 虚拟环境 `.venv/ffmpeg/bin/`
 4. Homebrew 路径（`HOMEBREW_PREFIX/bin/`）
 5. Linux 常见路径（`/usr/local/bin` 等）
+
+**FFprobe 查找**：与 FFmpeg 同目录，`find_ffprobe()` 先检查 FFmpeg 同目录下是否有 ffprobe，再检查系统 PATH。
+
+**FFprobe 缺失处理**：`check_ffmpeg_installed()` 同时检查 ffmpeg 和 ffprobe，如果 ffprobe 缺失则返回 False，触发 `_install_ffprobe_only()` 补充安装。
 
 ### 4.3 环境变量
 

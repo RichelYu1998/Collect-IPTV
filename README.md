@@ -17,7 +17,7 @@
 - **🌐 用户友好**：提供网页界面，支持搜索、筛选和在线播放
 - **🎬 在线播放**：网页内置 HLS 播放器，点击频道即可观看直播
 - **🔊 音量控制**：自定义音量调节、静音切换，支持所有音频编码自动转码
-- **🔊 智能音频检测**：FFprobe 服务端精确探测音频编码，自动识别并转码不兼容格式，确保任何频道都有声音
+- **🔊 智能音频检测**：FFprobe 服务端精确探测音频编码，自动识别并转码不兼容格式，确保任何频道都有声音（FFprobe 与 FFmpeg 统一安装，缺失时自动补充）
 - **📧 变更邮件通知**：M3U/M3U8 文件变更时自动发送邮件通知，支持 SMTP SSL/STARTTLS
 - **🔄 持续更新**：每4小时自动更新，确保数据新鲜度
 - **🐍 虚拟环境**：自动检测和管理Python虚拟环境
@@ -61,7 +61,7 @@ chmod +x script/iptv_tool.sh
 - ✅ 注册系统定时任务（Windows: 任务计划程序 / Linux: crontab），每4小时自动运行采集
 - ✅ 启动本地网页服务 http://localhost:8000（含CORS代理和在线播放）
 - ✅ 显示局域网访问地址（手机/其他设备可直接访问）
-- ✅ 自动安装FFmpeg，支持AC3/EAC3等音频编码实时转码
+- ✅ 自动安装FFmpeg + FFprobe，支持AC3/EAC3等音频编码实时转码
 
 ### 📋 命令行参数
 
@@ -268,7 +268,7 @@ Collect-IPTV/
 │   ├── .source_cache.json         # 源文件内容缓存（2小时有效）✨
 │   ├── .stream_cache.json         # 流测试结果缓存（4小时有效）
 │   └── bat_*.txt                  # 测试日志
-├── ffmpeg/                         # FFmpeg安装目录
+├── ffmpeg/                         # FFmpeg安装目录（自动下载，含ffmpeg+ffprobe）
 ├── .venv/                          # Python虚拟环境（唯一）
 ├── server.py                       # Web服务器 + FFmpeg安装
 ├── skill.md                        # 项目代码规范与范式文档
@@ -292,7 +292,7 @@ Collect-IPTV/
 | **CDN测速性能** | 2.8s (串行) | **0.0s** (缓存) / 首次1.6s (并行) |
 | **采集速度** | 基准速度 | **提升99%+** (2-3分钟→1.3秒) |
 | **缓存体系** | 无缓存或单一缓存 | **三级智能缓存** (CDN+源文件+流测试) |
-| **FFmpeg跨平台** | 仅Windows完整支持 | **动态检测** Windows/Linux/macOS/Homebrew |
+| **FFmpeg跨平台** | 仅Windows完整支持 | **动态检测** Windows/Linux/macOS/Homebrew + FFprobe统一安装 |
 | **移动端适配** | 仅桌面端 | **完全响应式** 手机/平板/桌面自适应 |
 
 ### 🚀 未来计划
@@ -301,7 +301,7 @@ Collect-IPTV/
 - [ ] 用户配置文件支持（可考虑存放在 `file/` 目录）
 - [ ] 基于 CI/CD 自动化部署流程
 - [ ] 为 `script/` 下的工具函数添加单元测试
-- [ ] 支持更多音频编码格式自动转码
+- [x] 支持更多音频编码格式自动转码（FFprobe + FFmpeg 统一安装）
 
 ### 脚本目录 (script/) - 启动脚本与工具
 
@@ -402,11 +402,11 @@ IPTV_SERVER_PORT=9000 ./iptv_tool.sh
 │   └── pip.ini / pip.conf
 ├── python/               ← 自动安装的 Python（仅当系统无 Python 时）
 │   └── python.exe
-└── ffmpeg/               ← 自动安装的 FFmpeg（仅当系统无 FFmpeg 时）
+└── ffmpeg/               ← 自动安装的 FFmpeg + FFprobe（仅当系统无 FFmpeg 时）
     └── bin/
-        ├── ffmpeg.exe
-        ├── ffplay.exe
-        └── ffprobe.exe
+        ├── ffmpeg[.exe]
+        ├── ffprobe[.exe]
+        └── ffplay[.exe]  ← 仅部分安装源包含
 ```
 
 删除 `.venv` 即可完全清理所有自动安装的依赖。
@@ -478,6 +478,21 @@ cp config/notify.json.example config/notify.json
                                       ↓ 兼容
                                  浏览器直接播放（有声音）
 ```
+
+**FFprobe 与 FFmpeg 统一安装**：
+
+FFprobe 是音频编码探测的关键工具，必须与 FFmpeg 一起安装才能正确识别 AC3/EAC3 等编码。本项目实现了完整的 FFprobe 自动安装：
+
+| 平台 | FFprobe 来源 |
+|------|-------------|
+| **macOS (npm)** | `@ffprobe-installer/ffprobe`（npm 淘宝镜像） |
+| **macOS (evermeet.cx)** | `https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip`（单独下载） |
+| **Windows (npm)** | `@ffprobe-installer/ffprobe`（npm 淘宝镜像） |
+| **Windows (Gyan.dev/BtbN)** | FFmpeg 压缩包内已包含 ffprobe |
+| **Linux (npm)** | `@ffprobe-installer/ffprobe`（npm 淘宝镜像） |
+| **Linux (BtbN)** | FFmpeg 压缩包内已包含 ffprobe |
+
+**智能补充安装**：如果检测到 FFmpeg 已安装但 FFprobe 缺失（如之前只安装了 ffmpeg-static），会自动触发 FFprobe 补充安装，无需重新下载 FFmpeg。
 
 **智能音频检测流程**：
 1. 播放开始时，立即启动 FFprobe 服务端探测（与视频加载并行，不阻塞画面）

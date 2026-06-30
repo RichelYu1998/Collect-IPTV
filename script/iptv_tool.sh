@@ -194,50 +194,22 @@ detect_ffmpeg() {
         return 0
     fi
 
-    echo "未找到 FFmpeg，正在自动安装..."
+    echo "未找到 FFmpeg，正在通过跨平台安装工具安装..."
     echo ""
 
-    case "$(uname -s)" in
-        Darwin)
-            if command -v brew &> /dev/null; then
-                echo "[1/1] 通过 Homebrew 安装 FFmpeg..."
-                brew install ffmpeg
-            else
-                echo "[警告] 未找到 Homebrew，无法自动安装 FFmpeg"
-                echo "   请先安装 Homebrew: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-                echo "   然后运行: brew install ffmpeg"
-                return 0
-            fi
-            ;;
-        Linux)
-            if command -v apt-get &> /dev/null; then
-                echo "[1/1] 通过 apt 安装 FFmpeg..."
-                sudo apt-get update -qq && sudo apt-get install -y ffmpeg
-            elif command -v yum &> /dev/null; then
-                echo "[1/1] 通过 yum 安装 FFmpeg..."
-                sudo yum install -y epel-release 2>/dev/null
-                sudo yum install -y ffmpeg
-            elif command -v dnf &> /dev/null; then
-                echo "[1/1] 通过 dnf 安装 FFmpeg..."
-                sudo dnf install -y ffmpeg
-            elif command -v pacman &> /dev/null; then
-                echo "[1/1] 通过 pacman 安装 FFmpeg..."
-                sudo pacman -Syu --noconfirm ffmpeg
-            elif command -v apk &> /dev/null; then
-                echo "[1/1] 通过 apk 安装 FFmpeg..."
-                sudo apk add ffmpeg
-            else
-                echo "[警告] 未识别的包管理器，请手动安装 FFmpeg"
-                return 0
-            fi
-            ;;
-        *)
-            echo "[警告] 不支持的操作系统，无法自动安装 FFmpeg"
-            return 0
-            ;;
-    esac
+    if [ -f "$WORK_DIR/server.py" ]; then
+        $PYTHON_CMD "$WORK_DIR/server.py" --setup-ffmpeg
+    else
+        echo "[警告] 未找到 server.py，无法自动安装 FFmpeg"
+        echo "   可手动安装: https://ffmpeg.org/download.html"
+        return 0
+    fi
 
-    if command -v ffmpeg &> /dev/null; then
+    if [ -x "$FFMPEG_DIR/bin/ffmpeg" ]; then
+        export PATH="$FFMPEG_DIR/bin:$PATH"
+        echo "[*] FFmpeg 安装成功:"
+        ffmpeg -version 2>&1 | head -1
+    elif command -v ffmpeg &> /dev/null; then
         echo "[*] FFmpeg 安装成功:"
         ffmpeg -version 2>&1 | head -1
     else
@@ -503,7 +475,8 @@ cleanup_exit() {
 }
 
 main() {
-    WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    WORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
     cd "$WORK_DIR"
 
     init_homebrew
