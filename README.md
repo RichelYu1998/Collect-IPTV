@@ -384,6 +384,8 @@ chmod +x script/iptv_tool.sh
 | `IPTV_PRELOAD_WORKERS` | 6 | 预加载线程池工作线程数 |
 | `IPTV_PRELOAD_SYNC_FIRST` | 3 | 同步等待预完成的分片数（消除前几秒卡顿） |
 | `IPTV_PRELOAD_SYNC_ALL` | false | 设为 true 则**所有** .ts 分片同步预加载完再返回 m3u8（全量预热） |
+| `IPTV_PRELOAD_PIPELINE_INTERVAL` | 3 | 持续预热管道刷新间隔（秒） |
+| `IPTV_PRELOAD_PIPELINE_MAX_AGE` | 300 | 持续预热管道最大存活时间（秒） |
 | `PYTHON_LATEST_VERSION` | 3.11.9 | 自动安装 Python 版本 |
 
 使用示例：
@@ -601,6 +603,28 @@ python server.py
 ```
 
 > ⚠️ 全量预热会增加首次打开的等待时间（5-15秒），但换来的是**整个播放周期零卡顿**。对于直播流通常有 6-10 个分片，6 线程并发下预热很快。
+
+### 持续预热管道 — 根治播放过程中卡顿
+
+**根本问题**：HLS 直播流的 m3u8 是**动态刷新**的——每隔几秒就会产生新的 `.ts` 分片。一次性预加载只能覆盖当前时刻的分片，播放过程中浏览器请求的是**新产生的分片**，这些没有被预加载到 → 卡顿。
+
+**解决方案**：返回 m3u8 后启动一个后台守护线程（`_preload_pipeline`），持续循环：
+
+```
+时间线：
+  t=0s   浏览器请求m3u8 → 预加载当前所有.ts + 启动管道
+  t=3s   管道刷新m3u8 → 发现新.ts7 → 预加载 ✅
+  t=6s   管道刷新m3u8 → 发现新.ts8 → 预加载 ✅
+  t=9s   管道刷新m3u8 → 发现新.ts9 → 预载 ✅
+  ...    持续运行，永远领先浏览器一步
+```
+
+无论 m3u8 怎么刷新，新的分片都会在浏览器请求前被预加载到缓存中。**全程零卡顿**。
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `IPTV_PRELOAD_PIPELINE_INTERVAL` | 3s | 每隔多少秒刷新一次 m3u8 |
+| `IPTV_PRELOAD_PIPELINE_MAX_AGE` | 300s | 管道最大存活时间（超时自动退出） |
 
 **关键优化 — 消除前 15 秒卡顿**：
 
@@ -976,6 +1000,8 @@ https://github.com/RichelYu1998/Collect-IPTV
 - ✅ **缓存命中流式发送**：缓存命中也分块 64KB + flush 发送，不等整个文件写完再发
 - ✅ **预加载参数调优**：默认 500 条目 / 500MB / 180s TTL / 6 线程
 - ✅ **全量预热模式**（`IPTV_PRELOAD_SYNC_ALL=true`）：所有 .ts 分片同步预加载完再返回 m3u8，全程零延迟
+- ✅ **持续预热管道**：后台守护线程每 3 秒刷新 m3u8 并预加载新分片，根治 HLS 动态刷新导致的播放卡顿
+- ✅ **新增 2 个环境变量**：`IPTV_PRELOAD_PIPELINE_INTERVAL`、`IPTV_PRELOAD_PIPELINE_MAX_AGE`
 
 ### v2.6.0 (2026-06-29) - 📱 移动端适配 + 文件整理
 - ✅ **移动端响应式设计**

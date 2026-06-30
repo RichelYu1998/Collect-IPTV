@@ -155,6 +155,12 @@ CONFIG = {
 - **前 `PRELOAD_SYNC_FIRST` 个分片同步等待**：使用 `future.result()` 阻塞直到预加载完成，确保浏览器请求时已缓存命中
 - **`PRELOAD_SYNC_ALL` 模式**：设为 true 时**所有**分片同步等待，返回 m3u8 时全部已在缓存中，全程零延迟
 - 后续分片（非 SYNC_ALL 时）异步提交，不阻塞返回
+- **持续预热管道**（`start_preload_pipeline`）：m3u8 返回后启动后台守护线程 `_preload_pipeline`
+  - 每 `PRELOAD_PIPELINE_INTERVAL`（3s）刷新一次 m3u8
+  - 提取新 .ts 分片 URL 并调用 `preload_segments` 预加载
+  - daemon 线程，异常或超时自动退出并从 `preload_pipelines` 字典移除
+  - 同一 m3u8 URL 只启动一个管道（`preload_pipelines` 去重）
+  - **根治 HLS 动态刷新导致的播放卡顿**
 - 缓存结构：`preload_cache = {url: {data, ct, ts}}`
 - 淘汰策略：LRU（`preload_order` FIFO）+ TTL（120s）双重淘汰
 - 限制：最大 500 条目 / 500MB
@@ -187,6 +193,8 @@ CONFIG = {
 | `IPTV_PRELOAD_WORKERS` | 6 | 预加载线程池工作线程数 |
 | `IPTV_PRELOAD_SYNC_FIRST` | 3 | 同步等待前 N 个分片完成（消除首屏卡顿） |
 | `IPTV_PRELOAD_SYNC_ALL` | false | 设为 true 则**所有**分片同步预加载完再返回 m3u8 |
+| `IPTV_PRELOAD_PIPELINE_INTERVAL` | 3 | 持续预热管道刷新间隔（秒） |
+| `IPTV_PRELOAD_PIPELINE_MAX_AGE` | 300 | 持续预热管道最大存活时间（秒） |
 
 ---
 

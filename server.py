@@ -53,6 +53,7 @@ preload_order = []
 preload_size = 0
 preload_lock = threading.Lock()
 preload_executor = None
+preload_pipelines = {}
 
 PROJECT_ROOT = Path(__file__).parent
 FFMPEG_INSTALL_DIR = PROJECT_ROOT / '.venv' / 'ffmpeg'
@@ -903,6 +904,45 @@ def preload_segments(urls):
             pass
 
 
+PRELOAD_PIPELINE_INTERVAL = int(os.environ.get('IPTV_PRELOAD_PIPELINE_INTERVAL', '3'))
+PRELOAD_PIPELINE_MAX_AGE = int(os.environ.get('IPTV_PRELOAD_PIPELINE_MAX_AGE', '300'))
+
+
+def _preload_pipeline(m3u8_url):
+    try:
+        while True:
+            req = urllib.request.Request(m3u8_url)
+            req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            with urllib.request.urlopen(req, timeout=PROXY_TIMEOUT) as resp:
+                data = resp.read(MAX_CONTENT_LENGTH)
+            text = data.decode('utf-8', errors='replace')
+            seg_urls = []
+            for line in text.split('\n'):
+                s = line.strip()
+                if s and not s.startswith('#'):
+                    if s.startswith('http://') or s.startswith('https://'):
+                        seg_urls.append(s)
+                    else:
+                        seg_urls.append(urllib.parse.urljoin(m3u8_url, s))
+            if seg_urls:
+                preload_segments(seg_urls)
+            time.sleep(PRELOAD_PIPELINE_INTERVAL)
+    except Exception:
+        pass
+    finally:
+        with preload_lock:
+            preload_pipelines.pop(m3u8_url, None)
+
+
+def start_preload_pipeline(m3u8_url):
+    with preload_lock:
+        if m3u8_url in preload_pipelines:
+            return
+        preload_pipelines[m3u8_url] = True
+    t = threading.Thread(target=_preload_pipeline, args=(m3u8_url,), daemon=True, name=f'pipeline-{hashlib.md5(m3u8_url.encode()).hexdigest()[:8]}')
+    t.start()
+
+
 def needs_transcode(url):
     if not FFMPEG_PATH:
         return False
@@ -1209,6 +1249,8 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
 
                     if seg_urls:
                         preload_segments(seg_urls)
+
+                    start_preload_pipeline(target_url)
 
                     text = self._rewrite_m3u8(text, target_url)
                     data = text.encode('utf-8')
