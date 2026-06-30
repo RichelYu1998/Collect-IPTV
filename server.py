@@ -17,6 +17,8 @@ import urllib.request
 import http.server
 import functools
 import threading
+import queue
+import concurrent.futures
 from pathlib import Path
 
 PORT = int(os.environ.get('IPTV_SERVER_PORT', '8000'))
@@ -39,6 +41,16 @@ transcode_sessions = {}
 transcode_lock = threading.Lock()
 audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
+
+PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '200'))
+PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(300 * 1024 * 1024)))
+PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '120'))
+PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '4'))
+preload_cache = {}
+preload_order = []
+preload_size = 0
+preload_lock = threading.Lock()
+preload_executor = None
 
 PROJECT_ROOT = Path(__file__).parent
 FFMPEG_INSTALL_DIR = PROJECT_ROOT / '.venv' / 'ffmpeg'
@@ -830,6 +842,56 @@ def probe_audio_cached(url):
     return result
 
 
+def _preload_evict():
+    global preload_size
+    now = time.time()
+    expired = [k for k, v in preload_cache.items() if now - v['ts'] > PRELOAD_TTL]
+    for k in expired:
+        preload_size -= len(preload_cache[k]['data'])
+        del preload_cache[k]
+        if k in preload_order:
+            preload_order.remove(k)
+    while (preload_order and
+           (len(preload_cache) > PRELOAD_MAX_ENTRIES or preload_size > PRELOAD_MAX_SIZE)):
+        oldest = preload_order.pop(0)
+        if oldest in preload_cache:
+            preload_size -= len(preload_cache[oldest]['data'])
+            del preload_cache[oldest]
+
+
+def _preload_fetch(url):
+    try:
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        req.add_header('Accept', '*/*')
+        req.add_header('Connection', 'keep-alive')
+        with urllib.request.urlopen(req, timeout=PROXY_TIMEOUT) as resp:
+            content_type = resp.headers.get('Content-Type', 'application/octet-stream').lower()
+            data = resp.read(MAX_CONTENT_LENGTH)
+        with preload_lock:
+            _preload_evict()
+            preload_cache[url] = {'data': data, 'ct': content_type, 'ts': time.time()}
+            preload_order.append(url)
+            preload_size += len(data)
+    except Exception:
+        pass
+
+
+def preload_segments(urls):
+    global preload_executor
+    if preload_executor is None:
+        preload_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=PRELOAD_WORKERS, thread_name_prefix='preload')
+    pending = []
+    for url in urls:
+        with preload_lock:
+            if url in preload_cache:
+                continue
+        pending.append(url)
+    for url in pending:
+        preload_executor.submit(_preload_fetch, url)
+
+
 def needs_transcode(url):
     if not FFMPEG_PATH:
         return False
@@ -1016,6 +1078,53 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             pass
 
+    def _stream_proxy_body(self, resp, content_length):
+        first_chunk_size = 8192
+        chunk_size = 65536
+        buf = queue.Queue(maxsize=8)
+        reader_error = [None]
+
+        def _reader():
+            total = 0
+            try:
+                first = True
+                while True:
+                    sz = first_chunk_size if first else chunk_size
+                    first = False
+                    chunk = resp.read(sz)
+                    if not chunk:
+                        buf.put(None)
+                        break
+                    total += len(chunk)
+                    if total > MAX_CONTENT_LENGTH:
+                        buf.put(None)
+                        break
+                    buf.put(chunk)
+            except Exception as e:
+                reader_error[0] = e
+                buf.put(None)
+
+        t = threading.Thread(target=_reader, daemon=True)
+        t.start()
+
+        while True:
+            chunk = buf.get()
+            if chunk is None:
+                break
+            if content_length:
+                self.wfile.write(chunk)
+            else:
+                self.wfile.write(f'{len(chunk):x}\r\n'.encode())
+                self.wfile.write(chunk)
+                self.wfile.write(b'\r\n')
+
+        if not content_length:
+            self.wfile.write(b'0\r\n\r\n')
+
+        t.join(timeout=5)
+        if reader_error[0]:
+            raise reader_error[0]
+
     def _handle_proxy(self):
         encoded_url = self.path[len(PROXY_PREFIX):]
         target_url = urllib.parse.unquote(encoded_url)
@@ -1024,6 +1133,20 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_proxy_error(400, 'Invalid proxy target URL')
             return
 
+        with preload_lock:
+            cached = preload_cache.get(target_url)
+            if cached and time.time() - cached['ts'] <= PRELOAD_TTL:
+                self.send_response(200)
+                self.send_header('Content-Type', cached['ct'])
+                self.send_header('Content-Length', str(len(cached['data'])))
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', '*')
+                self.send_header('X-Preload-Hit', '1')
+                self.end_headers()
+                self.wfile.write(cached['data'])
+                return
+
         try:
             req = urllib.request.Request(target_url)
             req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -1031,7 +1154,6 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             with urllib.request.urlopen(req, timeout=PROXY_TIMEOUT) as resp:
                 content_type = resp.headers.get('Content-Type', 'application/octet-stream').lower()
-                data = resp.read(MAX_CONTENT_LENGTH)
 
                 is_m3u8 = any(ct in content_type for ct in M3U8_CONTENT_TYPES)
                 if not is_m3u8:
@@ -1048,6 +1170,7 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 if is_m3u8:
+                    data = resp.read(MAX_CONTENT_LENGTH)
                     try:
                         text = data.decode('utf-8')
                     except UnicodeDecodeError:
@@ -1055,19 +1178,47 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                             text = data.decode('latin-1')
                         except Exception:
                             text = data.decode('utf-8', errors='replace')
+
+                    seg_urls = []
+                    for line in text.split('\n'):
+                        s = line.strip()
+                        if s and not s.startswith('#'):
+                            if s.startswith('http://') or s.startswith('https://'):
+                                seg_urls.append(s)
+                            else:
+                                seg_urls.append(urllib.parse.urljoin(target_url, s))
+
+                    if seg_urls:
+                        preload_segments(seg_urls)
+
                     text = self._rewrite_m3u8(text, target_url)
                     data = text.encode('utf-8')
                     content_type = 'application/vnd.apple.mpegurl'
 
-                self.send_response(200)
-                self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', str(len(data)))
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', '*')
-                self.send_header('Cache-Control', 'no-cache')
-                self.end_headers()
-                self.wfile.write(data)
+                    self.send_response(200)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Length', str(len(data)))
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', '*')
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self.send_response(200)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', '*')
+                    self.send_header('Cache-Control', 'no-cache')
+                    content_length = resp.headers.get('Content-Length')
+                    if content_length:
+                        self.send_header('Content-Length', content_length)
+                    else:
+                        self.send_header('Transfer-Encoding', 'chunked')
+                    self.end_headers()
+
+                    self._stream_proxy_body(resp, content_length)
 
         except urllib.error.HTTPError as e:
             self._send_proxy_error(e.code, e.reason)

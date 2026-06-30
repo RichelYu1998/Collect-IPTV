@@ -137,11 +137,27 @@ CONFIG = {
 
 | 路径前缀 | 功能 |
 |----------|------|
-| `/proxy/` | CORS 代理，转发外部流媒体请求 |
+| `/proxy/` | CORS 代理，转发外部流媒体请求（流式 + 预加载） |
 | `/transcode/` | 音频转码，AC3/EAC3 → AAC |
 | `/tstream/` | 转码流管理，HLS 分片 |
 
-### 4.2 FFmpeg / FFprobe 查找顺序
+### 4.2 流式代理与预加载
+
+**流式代理**（`_stream_proxy_body`）：
+- 非 m3u8 响应（.ts 分片等）使用读写并行双线程转发
+- 读线程从上游拉 chunk 放入 `queue.Queue(maxsize=8)`，主线程从 queue 取出写给浏览器
+- 首块 8KB 快速出首字节，后续 64KB
+- `None` 哨兵标记结束，`reader_error` list 传递读线程异常
+
+**智能预加载**（`preload_segments`）：
+- m3u8 解析完 URL 列表后立即触发预加载（在 rewrite + write 之前）
+- 使用 `concurrent.futures.ThreadPoolExecutor`（4 线程）替代裸线程
+- 缓存结构：`preload_cache = {url: {data, ct, ts}}`
+- 淘汰策略：LRU（`preload_order` FIFO）+ TTL（120s）双重淘汰
+- 限制：最大 200 条目 / 300MB
+- 请求进入 `_handle_proxy` 时先查缓存，命中则直接返回（`X-Preload-Hit: 1`）
+
+### 4.3 FFmpeg / FFprobe 查找顺序
 
 1. 系统 PATH（`shutil.which`）
 2. 项目目录 `ffmpeg/bin/`
@@ -162,6 +178,10 @@ CONFIG = {
 | `IPTV_TRANSCODE_SESSION_TIMEOUT` | 600 | 转码会话超时（秒） |
 | `IPTV_TRANSCODE_AUDIO_BITRATE` | 128k | 转码音频码率 |
 | `IPTV_MAX_CONTENT_LENGTH` | 50MB | 代理最大内容长度 |
+| `IPTV_PRELOAD_MAX_ENTRIES` | 200 | 预加载缓存最大条目数 |
+| `IPTV_PRELOAD_MAX_SIZE` | 300MB | 预加载缓存最大总内存 |
+| `IPTV_PRELOAD_TTL` | 120 | 预加载缓存过期时间（秒） |
+| `IPTV_PRELOAD_WORKERS` | 4 | 预加载线程池工作线程数 |
 
 ---
 
