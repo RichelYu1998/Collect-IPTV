@@ -152,6 +152,8 @@ CONFIG = {
 **智能预加载**（`preload_segments`）：
 - m3u8 解析完 URL 列表后立即触发预加载（在 rewrite + write 之前）
 - 使用 `concurrent.futures.ThreadPoolExecutor`（4 线程）替代裸线程
+- **前 `PRELOAD_SYNC_FIRST` 个分片同步等待**：使用 `future.result()` 阻塞直到预加载完成，确保浏览器请求时已缓存命中
+- 后续分片异步提交，不阻塞返回
 - 缓存结构：`preload_cache = {url: {data, ct, ts}}`
 - 淘汰策略：LRU（`preload_order` FIFO）+ TTL（120s）双重淘汰
 - 限制：最大 200 条目 / 300MB
@@ -182,6 +184,7 @@ CONFIG = {
 | `IPTV_PRELOAD_MAX_SIZE` | 300MB | 预加载缓存最大总内存 |
 | `IPTV_PRELOAD_TTL` | 120 | 预加载缓存过期时间（秒） |
 | `IPTV_PRELOAD_WORKERS` | 4 | 预加载线程池工作线程数 |
+| `IPTV_PRELOAD_SYNC_FIRST` | 3 | 同步等待前 N 个分片完成（消除首屏卡顿） |
 
 ---
 
