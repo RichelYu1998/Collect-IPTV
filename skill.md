@@ -1,0 +1,247 @@
+# 项目代码规范与范式 (Skill)
+
+> 本文档基于 Collect-IPTV 项目提炼，可作为同类 Python + Shell + GitHub Actions IPTV 采集项目的二开模版。
+
+---
+
+## 一、项目结构规范
+
+```
+项目根目录/
+├── .github/
+│   └── workflows/
+│       ├── iptv.py              # 采集脚本（核心逻辑）
+│       ├── iptv.yml             # GitHub Actions 工作流
+│       ├── index.html           # Web 前端页面
+│       └── IPTV/                # 频道源配置（txt 文件）
+├── script/
+│   ├── iptv_tool.sh             # 本地启动脚本（环境检测→采集→Web服务）
+│   └── notify.py                # 变更通知脚本（M3U/M3U8 变更→邮件通知）
+├── config/
+│   ├── notify.json              # 通知配置（运行时生成）
+│   └── notify.json.example      # 通知配置模板
+├── server.py                    # 本地 Web 服务（代理/转码/HLS）
+├── file/                        # 运行时数据目录
+│   ├── best_sorted.m3u          # 采集输出
+│   ├── best_sorted.m3u8         # 采集输出
+│   └── .cdn_cache.json          # CDN 缓存
+├── ffmpeg/                      # FFmpeg 二进制（自动下载）
+├── .venv/                       # Python 虚拟环境（自动创建）
+├── README.md                    # 项目文档（含版本号）
+├── skill.md                     # 代码规范文档（本文件）
+└── .gitignore
+```
+
+### 核心原则
+
+1. **采集与展示分离**：`iptv.py` 负责采集，`server.py` 负责本地 Web 服务
+2. **本地与云端双轨**：GitHub Actions 定时采集 + 本地脚本手动/定时采集
+3. **配置与代码分离**：`config/` 存放配置，`file/` 存放运行时数据
+4. **模板机制**：`.example` 文件作为配置模板，首次运行自动复制为正式配置
+5. **零侵入通知**：`notify.py` 独立运行，通过文件 MD5 检测变更，不影响主流程
+
+---
+
+## 二、Shell 脚本规范（iptv_tool.sh）
+
+### 2.1 启动流程
+
+```
+init_homebrew → detect_python_env → detect_ffmpeg → test_pip_mirrors → setup_venv → run_collection → notify → setup_scheduled_task_and_web
+```
+
+### 2.2 Homebrew 环境加载
+
+macOS 上脚本可能在没有加载 `.zshrc` 的环境中运行（如 Finder 双击），需要通过 `brew shellenv` 初始化：
+
+```bash
+init_homebrew() {
+    if [ "$(uname -s)" != "Darwin" ]; then
+        return 0
+    fi
+    if command -v brew &> /dev/null; then
+        return 0
+    fi
+    # 搜索常见 brew 路径，通过 shellenv 加载完整环境
+    for brew_path in "/opt/homebrew/bin/brew" "/usr/local/bin/brew"; do
+        if [ -x "$brew_path" ]; then
+            eval "$($brew_path shellenv)"
+            break
+        fi
+    done
+}
+```
+
+**关键**：`brew shellenv` 会设置 `HOMEBREW_PREFIX`、`HOMEBREW_CELLAR`、`HOMEBREW_REPOSITORY`、`PATH` 等，确保用户本地自定义的 `HOMEBREW_BOTTLE_DOMAIN` 等变量也被继承。
+
+### 2.3 编码规范
+
+| 项目 | 规范 |
+|------|------|
+| 解释器 | `#!/bin/bash` |
+| 输出语言 | 中文 |
+| 错误前缀 | `[错误]` |
+| 警告前缀 | `[警告]` |
+| 信息前缀 | `[*]` |
+| 步骤编号 | `[1/5]` `[2/5]` ... |
+| 耗时显示 | `show_step_time "步骤名" "$START_TIME"` |
+| 进程清理 | `trap cleanup_exit INT TERM` |
+
+---
+
+## 三、Python 采集脚本规范（iptv.py）
+
+### 3.1 配置系统
+
+所有可调参数通过环境变量 + `CONFIG` 字典管理：
+
+```python
+CONFIG = {
+    "timeout": int(os.environ.get("IPTV_TIMEOUT", "3")),
+    "max_parallel": int(os.environ.get("IPTV_MAX_PARALLEL", "200")),
+    "output_file": os.environ.get("IPTV_OUTPUT_FILE", "file/best_sorted.m3u"),
+}
+```
+
+### 3.2 FFmpeg 管理
+
+- 优先检测系统 PATH 中的 ffmpeg
+- 其次检测项目目录 `ffmpeg/bin/ffmpeg`
+- macOS 优先通过 Homebrew 安装
+- Linux 通过各包管理器安装
+- Windows 通过下载静态二进制
+
+### 3.3 缓存机制
+
+| 缓存文件 | 用途 | TTL |
+|----------|------|-----|
+| `.stream_cache.json` | 流测试结果 | 4小时 |
+| `.source_cache.json` | 源文件内容 | 2小时 |
+| `.cdn_cache.json` | CDN 测试结果 | 6小时 |
+
+### 3.4 频道分类
+
+- 省份频道：通过 `PROVINCE_ALIASES` + `COMMON_CHANNEL_SUFFIXES` 匹配
+- 智能分类：通过 `SMART_CATEGORY_KEYWORDS` 匹配（港澳台、体育、少儿动漫等）
+- 文本归一化：`normalize_text_for_match()` 统一繁简体、去标点
+
+---
+
+## 四、Web 服务规范（server.py）
+
+### 4.1 功能模块
+
+| 路径前缀 | 功能 |
+|----------|------|
+| `/proxy/` | CORS 代理，转发外部流媒体请求 |
+| `/transcode/` | 音频转码，AC3/EAC3 → AAC |
+| `/tstream/` | 转码流管理，HLS 分片 |
+
+### 4.2 FFmpeg 查找顺序
+
+1. 系统 PATH（`shutil.which`）
+2. 项目目录 `ffmpeg/bin/`
+3. 虚拟环境 `.venv/ffmpeg/bin/`
+4. Homebrew 路径（`HOMEBREW_PREFIX/bin/`）
+5. Linux 常见路径（`/usr/local/bin` 等）
+
+### 4.3 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `IPTV_SERVER_PORT` | 8000 | Web 服务端口 |
+| `IPTV_PROXY_TIMEOUT` | 15 | 代理超时（秒） |
+| `IPTV_TRANSCODE_SESSION_TIMEOUT` | 600 | 转码会话超时（秒） |
+| `IPTV_TRANSCODE_AUDIO_BITRATE` | 128k | 转码音频码率 |
+| `IPTV_MAX_CONTENT_LENGTH` | 50MB | 代理最大内容长度 |
+
+---
+
+## 五、变更通知规范（notify.py）
+
+### 5.1 工作原理
+
+```
+采集完成 → notify.py → 计算 M3U/M3U8 的 MD5 → 与上次对比 → 有变更则发邮件
+```
+
+### 5.2 配置文件（config/notify.json）
+
+```json
+{
+  "email_notification_enabled": false,
+  "email_smtp_host": "smtp.qq.com",
+  "email_smtp_port": 587,
+  "email_smtp_user": "your_email@qq.com",
+  "email_smtp_password": "your_smtp_authorization_code",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": ["best_sorted.m3u", "best_sorted.m3u8"],
+  "email_cooldown_seconds": 300,
+  "email_max_fail_count": 3,
+  "email_fail_cooldown_seconds": 1800
+}
+```
+
+### 5.3 邮件发送逻辑
+
+- 支持 SMTP SSL（端口 465）和 STARTTLS（端口 587）
+- 邮件同时包含纯文本和 HTML 两种格式
+- 冷却机制：同一收件人 `email_cooldown_seconds` 内不重复发送
+- 失败保护：连续失败 `email_max_fail_count` 次后暂停 `email_fail_cooldown_seconds` 秒
+- 变更状态通过 `.notify_hashes.json` 持久化
+
+### 5.4 集成方式
+
+在 `iptv_tool.sh` 的 `run_collection()` 末尾调用：
+
+```bash
+if [ -f "$WORK_DIR/script/notify.py" ]; then
+    echo "[*] 检测文件变更并发送通知..."
+    $PYTHON_CMD "$WORK_DIR/script/notify.py"
+fi
+```
+
+---
+
+## 六、GitHub Actions 规范
+
+### 6.1 工作流配置
+
+```yaml
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+```
+
+### 6.2 采集步骤
+
+1. Checkout 代码
+2. 设置 Node.js 24
+3. 设置 Python 3.10
+4. 安装 aiohttp
+5. 运行 `iptv.py`
+6. 更新 README.md 中的时间戳和文件链接
+7. 提交变更
+
+---
+
+## 七、编码风格速查
+
+| 项目 | 规范 |
+|------|------|
+| Python 版本 | 3.9+ |
+| 缩进 | 4 空格 |
+| 字符串 | 优先 f-string 格式化 |
+| 编码 | 所有文件 UTF-8，读写始终指定 `encoding='utf-8'` |
+| 换行 | LF（`.sh`），CRLF/LF 均可（其他文件） |
+| JSON 缩进 | 2 空格，`ensure_ascii=False` |
+| 路径拼接 | Python 用 `pathlib.Path`，Shell 用 `os.path.join` 或变量拼接 |
+| 异步框架 | `aiohttp` + `asyncio` |
+| 环境变量 | 所有可调参数通过 `os.environ.get()` 读取，提供默认值 |
+| 进程管理 | macOS/Linux: `pkill`，Windows: `taskkill` |
+| 敏感信息 | 配置模板用占位符，`.gitignore` 排除正式配置 |
+| Shell 输出 | 全中文，统一前缀格式 |
+| 版本号 | 唯一来源 `README.md`，格式 `### v1.2.3 (2026-06-30)` |
+| 依赖管理 | `pip install aiohttp`（最小依赖），虚拟环境 `.venv` |

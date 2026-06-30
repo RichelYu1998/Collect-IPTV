@@ -1,0 +1,16 @@
+{
+  "email_notification_enabled": false,
+  "email_smtp_host": "smtp.qq.com",
+  "email_smtp_port": 587,
+  "email_smtp_user": "your_email@qq.com",
+  "email_smtp_password": "your_smtp_authorization_code",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": [
+    "best_sorted.m3u",
+    "best_sorted.m3u8"
+  ],
+  "email_cooldown_seconds": 300,
+  "email_max_fail_count": 3,
+  "email_fail_cooldown_seconds": 1800
+}

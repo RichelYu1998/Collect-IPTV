@@ -18,6 +18,7 @@
 - **🎬 在线播放**：网页内置 HLS 播放器，点击频道即可观看直播
 - **🔊 音量控制**：自定义音量调节、静音切换，支持所有音频编码自动转码
 - **🔊 智能音频检测**：FFprobe 服务端精确探测音频编码，自动识别并转码不兼容格式，确保任何频道都有声音
+- **📧 变更邮件通知**：M3U/M3U8 文件变更时自动发送邮件通知，支持 SMTP SSL/STARTTLS
 - **🔄 持续更新**：每4小时自动更新，确保数据新鲜度
 - **🐍 虚拟环境**：自动检测和管理Python虚拟环境
 - **📱 跨平台**：支持Windows、Linux、macOS
@@ -51,11 +52,12 @@ chmod +x script/iptv_tool.sh
 [2/5] 测试PIP镜像源速度（自动选择最快镜像）
 [3/5] 检测Python虚拟环境
 [4/5] 设置虚拟环境并安装依赖
-[5/5] 运行IPTV采集（自动测速选最快CDN） → 注册定时任务 → 启动本地网页服务
+[5/5] 运行IPTV采集（自动测速选最快CDN） → 检测文件变更并发送邮件通知 → 注册定时任务 → 启动本地网页服务
 ```
 
 **启动后自动**：
 - ✅ 运行IPTV采集，生成最新的播放列表
+- ✅ 检测 M3U/M3U8 文件变更，自动发送邮件通知（需配置 `config/notify.json`）
 - ✅ 注册系统定时任务（Windows: 任务计划程序 / Linux: crontab），每4小时自动运行采集
 - ✅ 启动本地网页服务 http://localhost:8000（含CORS代理和在线播放）
 - ✅ 显示局域网访问地址（手机/其他设备可直接访问）
@@ -231,6 +233,8 @@ rm -f file/.source_cache.json   # 仅重新下载源文件
 | [server.py](server.py) | Web服务器 + FFmpeg自动安装（一体化）|
 | [script/iptv_tool.bat](script/iptv_tool.bat) | Windows一键启动工具 |
 | [script/iptv_tool.sh](script/iptv_tool.sh) | Linux/macOS一键启动工具 |
+| [script/notify.py](script/notify.py) | M3U/M3U8变更检测与邮件通知脚本 |
+| [config/notify.json.example](config/notify.json.example) | 邮件通知配置模板 |
 | [.github/workflows/iptv.py](.github/workflows/iptv.py) | IPTV采集核心脚本 |
 | [.github/workflows/index.html](.github/workflows/index.html) | 网页界面（含HLS在线播放）|
 | [.github/workflows/IPTV/](.github/workflows/IPTV/) | 频道配置目录 |
@@ -253,7 +257,10 @@ Collect-IPTV/
 ├── server.py                        # Web服务器 + FFmpeg安装（一体化）
 ├── script/                         # 启动脚本目录
 │   ├── iptv_tool.bat              # Windows启动脚本
-│   └── iptv_tool.sh               # Linux/macOS启动脚本
+│   ├── iptv_tool.sh               # Linux/macOS启动脚本
+│   └── notify.py                  # M3U/M3U8变更检测与邮件通知
+├── config/                         # 配置目录
+│   └── notify.json.example        # 邮件通知配置模板
 ├── file/                           # 生成文件和缓存目录
 │   ├── best_sorted.m3u            # M3U播放列表
 │   ├── best_sorted.m3u8           # M3U8播放列表
@@ -264,6 +271,7 @@ Collect-IPTV/
 ├── ffmpeg/                         # FFmpeg安装目录
 ├── .venv/                          # Python虚拟环境（唯一）
 ├── server.py                       # Web服务器 + FFmpeg安装
+├── skill.md                        # 项目代码规范与范式文档
 ├── README.md                       # 完整文档
 ├── LICENSE                         # 许可证
 └── .gitignore                      # Git忽略规则
@@ -295,12 +303,13 @@ Collect-IPTV/
 - [ ] 为 `script/` 下的工具函数添加单元测试
 - [ ] 支持更多音频编码格式自动转码
 
-### 脚本目录 (script/) - 启动脚本
+### 脚本目录 (script/) - 启动脚本与工具
 
 | 文件名 | 说明 |
 |--------|------|
 | [iptv_tool.bat](script/iptv_tool.bat) | Windows一键启动（环境检测+采集+Web服务）|
 | [iptv_tool.sh](script/iptv_tool.sh) | Linux/macOS一键启动 |
+| [notify.py](script/notify.py) | M3U/M3U8变更检测与邮件通知 |
 
 **使用方式：**
 ```bash
@@ -401,6 +410,64 @@ IPTV_SERVER_PORT=9000 ./iptv_tool.sh
 ```
 
 删除 `.venv` 即可完全清理所有自动安装的依赖。
+
+### 📧 变更邮件通知
+
+当 M3U/M3U8 播放列表文件发生变更时，自动发送邮件通知。
+
+**配置步骤**：
+
+1. 复制配置模板：
+```bash
+cp config/notify.json.example config/notify.json
+```
+
+2. 编辑 `config/notify.json`，填写 SMTP 信息：
+```json
+{
+  "email_notification_enabled": true,
+  "email_smtp_host": "smtp.qq.com",
+  "email_smtp_port": 587,
+  "email_smtp_user": "your_email@qq.com",
+  "email_smtp_password": "your_smtp_authorization_code",
+  "email_to": "recipient@example.com",
+  "watch_files": ["best_sorted.m3u", "best_sorted.m3u8"],
+  "email_cooldown_seconds": 300
+}
+```
+
+**配置项说明**：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `email_notification_enabled` | false | 是否启用邮件通知 |
+| `email_smtp_host` | smtp.qq.com | SMTP 服务器地址 |
+| `email_smtp_port` | 587 | SMTP 端口（587=STARTTLS, 465=SSL） |
+| `email_smtp_user` | - | SMTP 登录账号 |
+| `email_smtp_password` | - | SMTP 授权码（非邮箱密码） |
+| `email_from_name` | IPTV直播源监控 | 发件人显示名称 |
+| `email_to` | - | 收件人邮箱 |
+| `watch_files` | best_sorted.m3u, best_sorted.m3u8 | 监控的文件列表 |
+| `email_cooldown_seconds` | 300 | 发送冷却时间（秒），防止频繁发送 |
+| `email_max_fail_count` | 3 | 连续发送失败上限 |
+| `email_fail_cooldown_seconds` | 1800 | 失败后暂停时间（秒） |
+
+**工作原理**：
+- 采集完成后自动计算 M3U/M3U8 文件的 MD5 哈希值
+- 与上次记录对比，检测到变更则发送邮件
+- 邮件同时包含纯文本和 HTML 两种格式
+- 冷却机制：同一收件人在 `email_cooldown_seconds` 内不重复发送
+- 失败保护：连续失败 N 次后自动暂停，避免无效重试
+- 配置文件 `config/notify.json` 已在 `.gitignore` 中排除，不会泄露邮箱信息
+
+**常见 SMTP 配置**：
+
+| 邮箱 | SMTP 服务器 | 端口 | 说明 |
+|------|------------|------|------|
+| QQ 邮箱 | smtp.qq.com | 587 | 需开启 SMTP 服务并获取授权码 |
+| 163 邮箱 | smtp.163.com | 465 | 需开启 SMTP 服务并获取授权码 |
+| Gmail | smtp.gmail.com | 587 | 需开启应用专用密码 |
+| Outlook | smtp.office365.com | 587 | 直接使用账号密码 |
 
 ### 音频转码
 

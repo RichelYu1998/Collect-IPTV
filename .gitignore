@@ -58,3 +58,7 @@ ffmpeg/
 
 # Source file content cache
 .source_cache.json
+
+# Notify config (contains credentials)
+config/notify.json
+config/.notify_hashes.json
