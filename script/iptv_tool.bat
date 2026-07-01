@@ -439,7 +439,6 @@ if exist "%~dp0notify.py" (
 call :show_step_time "Total" "%SCRIPT_START_TIME%"
 
 echo.
-exit /b 0
 
 :setup_scheduled_task_and_web
 echo.
