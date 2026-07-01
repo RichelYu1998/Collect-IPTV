@@ -31,27 +31,36 @@ jobs:
         echo "=== 配置邮件通知 ==="
         mkdir -p config
         
-        cat > config/notify.json << 'EOF'
-        {
-          "email_notification_enabled": true,
-          "email_smtp_host": "${{ secrets.SMTP_HOST }}",
-          "email_smtp_port": ${{ secrets.SMTP_PORT }},
-          "email_smtp_user": "${{ secrets.SMTP_USER }}",
-          "email_smtp_password": "${{ secrets.SMTP_PASSWORD }}",
-          "email_from_name": "IPTV直播源监控",
-          "email_to": "${{ secrets.EMAIL_TO }}",
-          "watch_files": [
-            "file/best_sorted.m3u",
-            "file/best_sorted.m3u8"
-          ],
-          "email_cooldown_seconds": 300,
-          "email_max_fail_count": 3,
-          "email_fail_cooldown_seconds": 1800
-        }
-        EOF
+        python3 << 'PYEOF'
+        import json
         
-        echo "✅ 邮件配置文件已创建"
-        cat config/notify.json | head -5
+        config = {
+            "email_notification_enabled": True,
+            "email_smtp_host": """${{ secrets.SMTP_HOST }}""",
+            "email_smtp_port": int("""${{ secrets.SMTP_PORT }}"") if """${{ secrets.SMTP_PORT }}""".isdigit() else 587,
+            "email_smtp_user": """${{ secrets.SMTP_USER }}""",
+            "email_smtp_password": """${{ secrets.SMTP_PASSWORD }}""",
+            "email_from_name": "IPTV直播源监控",
+            "email_to": """${{ secrets.EMAIL_TO }}""",
+            "watch_files": [
+                "file/best_sorted.m3u",
+                "file/best_sorted.m3u8"
+            ],
+            "email_cooldown_seconds": 300,
+            "email_max_fail_count": 3,
+            "email_fail_cooldown_seconds": 1800
+        }
+        
+        with open('config/notify.json', 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        print("✅ 邮件配置文件已创建")
+        print(f"SMTP Host: {config['email_smtp_host']}")
+        print(f"SMTP Port: {config['email_smtp_port']}")
+        print(f"SMTP User: {config['email_smtp_user']}")
+        print(f"Email To: {config['email_to']}")
+        PYEOF
+        
     - name: Run scraping script
       run: python .github/workflows/iptv.py
     - name: GetTime
