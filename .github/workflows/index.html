@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -563,9 +563,15 @@
             if (Hls.isSupported()) {
                 currentHls = new Hls({
                     enableWorker: true,
-                    lowLatencyMode: true,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
+                    lowLatencyMode: false,
+                    maxBufferLength: 60,
+                    maxMaxBufferLength: 120,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    liveDurationInfinity: true,
+                    highBufferWatchdogPeriod: 2,
+                    progressive: true,
+                    abrEwmaDefaultEstimate: 500000,
                 });
                 currentHls.loadSource(proxiedUrl);
                 currentHls.attachMedia(video);
@@ -844,9 +850,15 @@
             if (Hls.isSupported()) {
                 currentHls = new Hls({
                     enableWorker: true,
-                    lowLatencyMode: true,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
+                    lowLatencyMode: false,
+                    maxBufferLength: 60,
+                    maxMaxBufferLength: 120,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    liveDurationInfinity: true,
+                    highBufferWatchdogPeriod: 2,
+                    progressive: true,
+                    abrEwmaDefaultEstimate: 500000,
                 });
                 currentHls.loadSource(transcodeUrl);
                 currentHls.attachMedia(video);
@@ -1094,3 +1106,4 @@
     </div>
 </body>
 </html>
+

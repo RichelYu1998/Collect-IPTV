@@ -31,7 +31,7 @@ TRANSCODE_AUDIO_CHANNELS = os.environ.get('IPTV_TRANSCODE_AUDIO_CHANNELS', '2')
 TRANSCODE_HLS_TIME = os.environ.get('IPTV_TRANSCODE_HLS_TIME', '4')
 TRANSCODE_HLS_LIST_SIZE = os.environ.get('IPTV_TRANSCODE_HLS_LIST_SIZE', '6')
 TRANSCODE_SESSION_TIMEOUT = int(os.environ.get('IPTV_TRANSCODE_SESSION_TIMEOUT', '600'))
-PROXY_TIMEOUT = int(os.environ.get('IPTV_PROXY_TIMEOUT', '15'))
+PROXY_TIMEOUT = int(os.environ.get('IPTV_PROXY_TIMEOUT', '30'))
 
 
 FFMPEG_PATH = None
@@ -43,9 +43,9 @@ audio_probe_lock = threading.Lock()
 
 PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '500'))
 PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(500 * 1024 * 1024)))
-PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '180'))
-PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '6'))
-PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '3'))
+PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '300'))
+PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '10'))
+PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '5'))
 PRELOAD_SYNC_ALL = os.environ.get('IPTV_PRELOAD_SYNC_ALL', '').lower() in ('1', 'true', 'yes')
 preload_cache = {}
 preload_order = []
@@ -953,7 +953,7 @@ def preload_segments(urls):
             pass
 
 
-PRELOAD_PIPELINE_INTERVAL = int(os.environ.get('IPTV_PRELOAD_PIPELINE_INTERVAL', '3'))
+PRELOAD_PIPELINE_INTERVAL = int(os.environ.get('IPTV_PRELOAD_PIPELINE_INTERVAL', '2'))
 PRELOAD_PIPELINE_MAX_AGE = int(os.environ.get('IPTV_PRELOAD_PIPELINE_MAX_AGE', '300'))
 
 
@@ -1179,9 +1179,9 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             pass
 
     def _stream_proxy_body(self, resp, content_length):
-        first_chunk_size = 8192
-        chunk_size = 65536
-        buf = queue.Queue(maxsize=8)
+        first_chunk_size = 32768
+        chunk_size = 262144
+        buf = queue.Queue(maxsize=16)
         reader_error = [None]
 
         def _reader():
@@ -1529,3 +1529,4 @@ if __name__ == '__main__':
         sys.exit(0 if success else 1)
     else:
         main()
+
