@@ -587,29 +587,55 @@
                 currentPlayer.load();
                 currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => {
                     if (loading) loading.classList.add('hidden');
+                    retryCount = 0;
                     tryPlayWithSound(video);
                     checkAudioTracksFromPlayer(info);
                 });
                 currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
                     if (loading) loading.classList.add('hidden');
-                    if (startBtn) startBtn.classList.add('hidden');
                     const errType = detail && detail.type ? detail.type : type;
                     const errDetail = detail && detail.info ? detail.info : detail;
+                    console.warn('[Player] Error:', errType, errDetail);
                     if (errType === mpegts.ErrorTypes.NETWORK_ERROR) {
-                        if (!currentTranscodeId && !retryCount) {
+                        if (retryCount < 2) {
                             retryCount++;
-                            console.log('Network error, attempting transcode...');
+                            console.log('[Player] Network error, retrying...');
+                            setTimeout(() => {
+                                if (currentPlayer && currentPlayUrl === url) {
+                                    currentPlayer.unload();
+                                    currentPlayer.load();
+                                    currentPlayer.play().catch(() => {});
+                                }
+                            }, 2000);
+                        } else if (!currentTranscodeId) {
+                            console.log('[Player] Network retry failed, attempting transcode...');
                             startAudioTranscode('');
                         } else {
                             showPlayerError('直播源暂时不可用，请稍后重试或更换其他频道');
                             retryCount = 0;
                         }
                     } else if (errType === mpegts.ErrorTypes.MEDIA_ERROR) {
-                        console.log('Media error, attempting recovery...');
-                    } else {
-                        if (!currentTranscodeId && !retryCount) {
+                        if (retryCount < 3) {
                             retryCount++;
-                            console.log('Playback error, attempting transcode...');
+                            console.log('[Player] Media error, attempting recovery...', retryCount);
+                            setTimeout(() => {
+                                if (currentPlayer && currentPlayUrl === url) {
+                                    currentPlayer.unload();
+                                    currentPlayer.load();
+                                    currentPlayer.play().catch(() => {});
+                                }
+                            }, 1000);
+                        } else if (!currentTranscodeId) {
+                            console.log('[Player] Media recovery failed, attempting transcode...');
+                            startAudioTranscode('');
+                        } else {
+                            showPlayerError('播放异常，请重试');
+                            retryCount = 0;
+                        }
+                    } else {
+                        if (!currentTranscodeId && retryCount < 1) {
+                            retryCount++;
+                            console.log('[Player] Unknown error, attempting transcode...');
                             startAudioTranscode('');
                         } else {
                             showPlayerError('播放异常：' + (errDetail || '未知错误'));
@@ -871,13 +897,27 @@
                 });
                 currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
                     const errType = detail && detail.type ? detail.type : type;
+                    console.warn('[Transcode] Error:', errType, detail);
                     if (errType === mpegts.ErrorTypes.MEDIA_ERROR) {
                         console.log('[Transcode] Media error, attempting reload...');
-                        currentPlayer.unload();
-                        currentPlayer.load();
-                        currentPlayer.play();
+                        setTimeout(() => {
+                            if (currentPlayer && currentTranscodeId) {
+                                currentPlayer.unload();
+                                currentPlayer.load();
+                                currentPlayer.play().catch(() => {});
+                            }
+                        }, 1000);
+                    } else if (errType === mpegts.ErrorTypes.NETWORK_ERROR) {
+                        console.log('[Transcode] Network error, attempting reload...');
+                        setTimeout(() => {
+                            if (currentPlayer && currentTranscodeId) {
+                                currentPlayer.unload();
+                                currentPlayer.load();
+                                currentPlayer.play().catch(() => {});
+                            }
+                        }, 2000);
                     } else {
-                        console.error('[Transcode] Error playing transcoded stream:', detail);
+                        console.error('[Transcode] Fatal error:', detail);
                         if (loading) loading.classList.add('hidden');
                         showPlayerError('直播流异常中断，请重试');
                     }
