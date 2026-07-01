@@ -60,3 +60,6 @@ bat_*.txt
 # Notify config (contains credentials)
 config/notify.json
 config/.notify_hashes.json
+
+# FFmpeg pre-compiled binaries (large binary files, download separately)
+ffmpeg/
