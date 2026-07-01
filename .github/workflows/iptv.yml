@@ -26,6 +26,32 @@ jobs:
         python-version: '3.10'
     - name: Install dependencies
       run: pip install aiohttp
+    - name: Setup email notification config
+      run: |
+        echo "=== 配置邮件通知 ==="
+        mkdir -p config
+        
+        cat > config/notify.json << 'EOF'
+        {
+          "email_notification_enabled": true,
+          "email_smtp_host": "${{ secrets.SMTP_HOST }}",
+          "email_smtp_port": ${{ secrets.SMTP_PORT }},
+          "email_smtp_user": "${{ secrets.SMTP_USER }}",
+          "email_smtp_password": "${{ secrets.SMTP_PASSWORD }}",
+          "email_from_name": "IPTV直播源监控",
+          "email_to": "${{ secrets.EMAIL_TO }}",
+          "watch_files": [
+            "file/best_sorted.m3u",
+            "file/best_sorted.m3u8"
+          ],
+          "email_cooldown_seconds": 300,
+          "email_max_fail_count": 3,
+          "email_fail_cooldown_seconds": 1800
+        }
+        EOF
+        
+        echo "✅ 邮件配置文件已创建"
+        cat config/notify.json | head -5
     - name: Run scraping script
       run: python .github/workflows/iptv.py
     - name: GetTime
