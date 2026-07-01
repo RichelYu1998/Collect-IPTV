@@ -1,72 +1,72 @@
 ---
 name: "iptv-dev"
-description: "Collect-IPTV project development guide. Invoke when modifying server.py, index.html, notify.py, iptv_tool.bat/sh, or working on FFmpeg/hls.js/mpegts.js/email notification features."
+description: "Collect-IPTV项目开发指南。修改server.py、index.html、notify.py、iptv_tool.bat/sh，或开发FFmpeg/hls.js/mpegts.js/邮件通知功能时调用。"
 ---
 
-# Collect-IPTV Development Skill
+# Collect-IPTV 开发技能
 
-## Project Overview
+## 项目概述
 
-IPTV live stream collection tool with auto-collection, deduplication, quality selection, web player, audio transcoding, and email notification.
+IPTV直播源智能采集工具，支持自动采集、去重、优选、在线播放、音频转码、邮件通知。
 
-## Architecture
+## 架构
 
 ```
-server.py          → Web server (aiohttp), CORS proxy, FFmpeg transcoding, preload cache, audio probe
-output/index.html  → Frontend with dual-engine player (hls.js + mpegts.js)
-script/notify.py   → Email notification (MD5 hash change detection)
-script/iptv_tool.bat/sh → Startup scripts (env detection → collection → notify → web server)
-.github/workflows/iptv.py → Collection script
-config/notify.json → Email config
+server.py          → Web服务器(aiohttp)，CORS代理，FFmpeg转码，预加载缓存，音频探测
+output/index.html  → 前端双引擎播放器(hls.js + mpegts.js)
+script/notify.py   → 邮件通知(MD5哈希变更检测)
+script/iptv_tool.bat/sh → 启动脚本(环境检测→采集→通知→Web服务)
+.github/workflows/iptv.py → 采集脚本
+config/notify.json → 邮件配置
 ```
 
-## Key Conventions
+## 关键规范
 
-### Player - Dual Engine (hls.js + mpegts.js)
+### 播放器 - 双引擎架构 (hls.js + mpegts.js)
 
-**mpegts.js does NOT support HLS/m3u8** — it only handles raw MPEG-TS and FLV streams.
-All IPTV sources are HLS (m3u8), so hls.js is the primary player.
+**mpegts.js 不支持 HLS/m3u8** — 它只能处理原始 MPEG-TS 和 FLV 流。
+所有 IPTV 源都是 HLS (m3u8) 格式，所以 hls.js 是主力播放器。
 
-#### URL Type Detection
+#### URL类型自动检测
 
 ```javascript
 const isHlsUrl = proxiedUrl.includes('.m3u8') || proxiedUrl.includes('.m3u') || proxiedUrl.includes('/hls/') || proxiedUrl.includes('/tstream/');
 ```
 
-#### HLS Player (hls.js) — for m3u8 URLs
+#### HLS播放器 (hls.js) — 用于m3u8链接
 
-- Use `new Hls(config)` for initialization
-- Load: `loadSource(url)` then `attachMedia(video)`
-- Event: `Hls.Events.MANIFEST_PARSED` (stream ready)
-- Error: `Hls.Events.ERROR` with `Hls.ErrorTypes.NETWORK_ERROR` / `MEDIA_ERROR`
-- Recover NETWORK: `startLoad()` (retry from last position)
-- Recover MEDIA: `recoverMediaError()` (rebuild MSE)
-- Destroy: `hls.destroy()`
-- Variable: `currentPlayer` (shared between hls.js and mpegts.js)
+- 初始化：`new Hls(config)`
+- 加载：`loadSource(url)` 然后 `attachMedia(video)`
+- 就绪事件：`Hls.Events.MANIFEST_PARSED`（流就绪）
+- 错误：`Hls.Events.ERROR`，含 `Hls.ErrorTypes.NETWORK_ERROR` / `MEDIA_ERROR`
+- 网络错误恢复：`startLoad()`（从上次位置重试）
+- 媒体错误恢复：`recoverMediaError()`（重建MSE）
+- 销毁：`hls.destroy()`
+- 变量：`currentPlayer`（hls.js和mpegts.js共用）
 
-#### hls.js Live Config
+#### hls.js 直播配置
 
 ```javascript
 {
     enableWorker: true,
-    lowLatencyMode: false,
-    backBufferLength: 10,
-    maxBufferLength: 10,
-    maxMaxBufferLength: 30,
+    lowLatencyMode: false,          // 非LL-HLS流开启反而增加卡顿
+    backBufferLength: 10,           // 回看缓冲10秒
+    maxBufferLength: 10,            // 前向缓冲10秒
+    maxMaxBufferLength: 30,         // 最大缓冲上限30秒
     maxBufferSize: 30 * 1000 * 1000,
     maxBufferHole: 0.5,
-    liveSyncDurationCount: 3,
-    liveMaxLatencyDurationCount: 6,
+    liveSyncDurationCount: 3,       // 从第3个分片开始同步
+    liveMaxLatencyDurationCount: 6, // 最大延迟6个分片
     liveDurationInfinity: true,
     progressive: true,
     highBufferWatchdogPeriod: 2,
-    abrEwmaDefaultEstimate: 800000,
-    abrEwmaFastEstimate: 1500000,
+    abrEwmaDefaultEstimate: 800000,  // ABR初始带宽800kbps
+    abrEwmaFastEstimate: 1500000,    // ABR快速带宽1.5Mbps
     abrBandWidthFactor: 0.7,
     abrBandWidthUpFactor: 1.5,
     startLevel: -1,
-    fragLoadingTimeOut: 10000,
-    fragLoadingMaxRetry: 3,
+    fragLoadingTimeOut: 10000,       // 分片加载超时10秒
+    fragLoadingMaxRetry: 3,          // 分片加载最大重试3次
     fragLoadingMaxRetryTimeout: 4000,
     manifestLoadingTimeOut: 10000,
     manifestLoadingMaxRetry: 3,
@@ -75,63 +75,63 @@ const isHlsUrl = proxiedUrl.includes('.m3u8') || proxiedUrl.includes('.m3u') || 
 }
 ```
 
-#### mpegts.js Player — for raw TS/FLV URLs only
+#### mpegts.js 播放器 — 仅用于原始TS/FLV链接
 
-- Use `mpegts.createPlayer({type:'mpegts', isLive:true, url}, config)` (NOT 'mse')
-- Attach: `attachMediaElement(video)` then `load()`
-- Ready events: `MEDIA_INFO` (primary), `METADATA_ARRIVED`, `loadeddata`, `canplay` (fallback)
-- Error: `mpegts.Events.ERROR` with `mpegts.ErrorTypes.NETWORK_ERROR` / `MEDIA_ERROR`
-- Destroy: `unload()` → `detachMediaElement()` → `destroy()`
-- Recover: `unload()` → `load()` → `play()`
+- 初始化：`mpegts.createPlayer({type:'mpegts', isLive:true, url}, config)`（不是'mse'）
+- 加载：`attachMediaElement(video)` 然后 `load()`
+- 就绪事件：`MEDIA_INFO`（主）, `METADATA_ARRIVED`, `loadeddata`, `canplay`（兜底）
+- 错误：`mpegts.Events.ERROR`，含 `mpegts.ErrorTypes.NETWORK_ERROR` / `MEDIA_ERROR`
+- 销毁：`unload()` → `detachMediaElement()` → `destroy()`
+- 恢复：`unload()` → `load()` → `play()`
 
-#### mpegts.js Live Config
+#### mpegts.js 直播配置
 
 ```javascript
 {
     enableWorker: true,
-    enableStashBuffer: true,
-    stashInitialSize: 1024,
+    enableStashBuffer: true,        // 启用缓冲（false会导致网络波动卡死）
+    stashInitialSize: 1024,         // 初始缓冲1KB（128太小）
     lazyLoad: false,
     autoCleanupSourceBuffer: true,
     autoCleanupMaxBackwardDuration: 30,
     autoCleanupMinBackwardDuration: 10,
     liveBufferLatencyChasing: true,
-    liveBufferLatencyMaxLatency: 10,
-    liveBufferLatencyMinRemain: 2,
+    liveBufferLatencyMaxLatency: 10, // 最大延迟10秒
+    liveBufferLatencyMinRemain: 2,   // 保留2秒缓冲（0.5秒太激进）
 }
 ```
 
-#### Shared Functions
+#### 共用函数
 
-- `destroyPlayer()` — checks `instanceof Hls` for hls.js, else mpegts.js destroy flow
-- `checkAudioTracksFromPlayer(info)` — handles both hls.js and mpegts.js track info formats
-- `currentPlayer` — shared variable, can be either Hls or mpegts player instance
+- `destroyPlayer()` — 检查 `instanceof Hls` 走hls.js销毁，否则走mpegts.js销毁流程
+- `checkAudioTracksFromPlayer(info)` — 兼容hls.js和mpegts.js的音轨信息格式
+- `currentPlayer` — 共用变量，可以是Hls实例或mpegts播放器实例
 
-### Audio Probe (server.py)
+### 音频探测 (server.py)
 
-#### Fast Probe: `_probe_audio_fast(url)`
+#### 快速探测：`_probe_audio_fast(url)`
 
-Python-native TS stream parser — no ffprobe/ffmpeg needed for non-encrypted streams:
+Python原生TS流解析器，非加密流无需ffprobe/ffmpeg：
 
-1. Download m3u8 → parse first TS segment URL
-2. Download 256KB TS data
-3. Parse TS packets (188 bytes each): sync byte 0x47, PID, PUSI flag
-4. Handle adaptation field and pointer byte (PUSI packets)
-5. Identify PES stream_id: 0xC0-0xDF = MPEG audio, 0xBD = private stream
-6. Detect codec: mp2/mp3 (MPEG audio), ac3/eac3/dts (private stream sub_id)
-7. Encrypted stream detection: pointer byte > 183 → switch to ffmpeg probe
+1. 下载m3u8 → 解析第一个TS分片URL
+2. 下载256KB TS数据
+3. 解析TS包（188字节）：同步字节0x47、PID、PUSI标志
+4. 处理adaptation field和pointer byte（PUSI包）
+5. 识别PES stream_id：0xC0-0xDF = MPEG音频，0xBD = 私有流
+6. 检测编解码：mp2/mp3（MPEG音频），ac3/eac3/dts（私有流sub_id）
+7. 加密流检测：pointer byte > 183 → 切换ffmpeg探测
 
-#### Fallback Chain
+#### 探测优先级链
 
-`_probe_audio_fast()` → `ffprobe` → `ffmpeg -i` → return error
+`_probe_audio_fast()` → `ffprobe` → `ffmpeg -i` → 返回错误
 
-- Non-encrypted streams: ~1-2 seconds (fast probe)
-- Encrypted streams: ~8-12 seconds (ffmpeg probe with larger probesize)
-- ffprobe: analyzeduration/probesize 2M, timeout 10s
-- ffmpeg encrypted: probesize 1M, timeout 12s
-- ffmpeg non-encrypted: probesize 500K, timeout 8s
+- 非加密流：约1-2秒（快速探测）
+- 加密流：约8-12秒（ffmpeg探测，较大probesize）
+- ffprobe：analyzeduration/probesize 2M，超时10秒
+- ffmpeg加密流：probesize 1M，超时12秒
+- ffmpeg非加密流：probesize 500K，超时8秒
 
-### FFmpeg Transcode Parameters
+### FFmpeg 转码参数
 
 ```python
 cmd = [
@@ -157,45 +157,45 @@ cmd = [
 ]
 ```
 
-Key changes from v2.9:
-- Removed `-re` flag (was limiting output rate, causing delay accumulation)
-- analyzeduration/probesize: 5M → 3M (faster startup)
-- Added `+fastseek` to fflags
+与v2.9的关键变更：
+- 移除 `-re` 参数（限制输出速率为1x，直播流延迟会累积）
+- analyzeduration/probesize：5M → 3M（更快启动）
+- fflags添加 `+fastseek`
 
-### Proxy Optimization
+### 代理优化
 
-- TS segments: **streaming transfer** (read 64KB → write → flush), not download-then-forward
-- Preload wait: 200ms (was 500ms)
-- TS caching: cache while forwarding, don't block transfer
+- TS分片：**流式转发**（读64KB → 写 → 刷出），不再全部下载完再转发
+- 预加载等待：200ms（原500ms）
+- TS缓存：边转发边缓存，不阻塞转发
 
-### Email Notification (notify.py)
+### 邮件通知 (notify.py)
 
-- Watch files: `file/best_sorted.m3u`, `file/best_sorted.m3u8`
-- Hash storage: `config/.notify_hashes.json`
-- First run: send email (mark as "new")
-- File changed (hash differs): send email (mark as "updated")
-- No change: skip sending
-- Scripts call: `notify.py --once` after collection
-- Config: `config/notify.json`
+- 监控文件：`file/best_sorted.m3u`、`file/best_sorted.m3u8`
+- 哈希存储：`config/.notify_hashes.json`
+- 首次运行：发送邮件（标记为"new"）
+- 文件变更（哈希不同）：发送邮件（标记为"updated"）
+- 无变化：跳过发送
+- 脚本调用：采集完成后执行 `notify.py --once`
+- 配置：`config/notify.json`
 
-### Shell Scripts
+### Shell脚本
 
-- bat/sh both call `notify.py --once` after IPTV collection
-- bat: `%PYTHON_CMD% "%~dp0notify.py" --once`
-- sh: `$PYTHON_CMD "$WORK_DIR/script/notify.py" --once`
-- Working dir: bat uses `cd /d "%~dp0.."`, sh uses `cd "$WORK_DIR"`
+- bat/sh都在IPTV采集后调用 `notify.py --once`
+- bat：`%PYTHON_CMD% "%~dp0notify.py" --once`
+- sh：`$PYTHON_CMD "$WORK_DIR/script/notify.py" --once`
+- 工作目录：bat用 `cd /d "%~dp0.."`，sh用 `cd "$WORK_DIR"`
 
-### Python Style
+### Python风格
 
-- Encoding: always specify `encoding='utf-8'`
-- Paths: use `pathlib.Path`
-- Async: `aiohttp` + `asyncio`
-- Config: environment variables with `os.environ.get()` and defaults
-- Version: single source in `README.md`, format `### v1.2.3 (YYYY-MM-DD)`
+- 编码：始终指定 `encoding='utf-8'`
+- 路径：使用 `pathlib.Path`
+- 异步：`aiohttp` + `asyncio`
+- 配置：环境变量 + `os.environ.get()` + 默认值
+- 版本号：唯一来源 `README.md`，格式 `### v1.2.3 (YYYY-MM-DD)`
 
-### File Locations
+### 文件位置
 
-- M3U/M3U8 output: `file/best_sorted.m3u`, `file/best_sorted.m3u8`
-- Web static: `output/` directory
-- FFmpeg binaries: `ffmpeg/{windows,linux,macos}/bin/`
-- Cache files: `file/.cdn_cache.json`, `file/.stream_cache.json`, `file/.source_cache.json`
+- M3U/M3U8输出：`file/best_sorted.m3u`、`file/best_sorted.m3u8`
+- Web静态文件：`output/` 目录
+- FFmpeg二进制：`ffmpeg/{windows,linux,macos}/bin/`
+- 缓存文件：`file/.cdn_cache.json`、`file/.stream_cache.json`、`file/.source_cache.json`
