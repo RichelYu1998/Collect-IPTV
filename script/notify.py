@@ -174,8 +174,15 @@ def send_email(config, changes):
 
     try:
         print('[通知] 正在发送邮件...')
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-        server.starttls()
+        
+        if smtp_port == 465:
+            print(f'[通知] 使用 SSL 连接 (端口 {smtp_port})...')
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+        else:
+            print(f'[通知] 使用 STARTTLS 连接 (端口 {smtp_port})...')
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+            server.starttls()
+        
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
@@ -186,7 +193,7 @@ def send_email(config, changes):
         print(f'[通知] SMTP 认证失败: {e}，请检查邮箱账号和授权码')
         return False
     except smtplib.SMTPServerDisconnected as e:
-        print(f'[通知] SMTP 连接断开: {e}，请检查网络连接')
+        print(f'[通知] SMTP 连接断开: {e}，请检查网络连接或尝试使用端口 465 (SSL)')
         return False
     except smtplib.SMTPException as e:
         print(f'[通知] SMTP 错误: {e}')
