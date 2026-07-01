@@ -1,5 +1,9 @@
 ﻿@echo off
 setlocal enabledelayedexpansion
+
+REM 切换到项目根目录（解决双击运行时路径问题）
+cd /d "%~dp0.."
+
 chcp 65001 > nul 2>&1
 set PYTHONIOENCODING=utf-8
 title IPTV Live Stream Collection Tool
@@ -425,6 +429,13 @@ if exist "best_sorted.m3u8" (
     for %%F in (best_sorted.m3u8) do echo    File size: %%~zF bytes
 )
 
+
+REM 检测文件变更并发送邮件通知（含附件）
+if exist "%~dp0notify.py" (
+    echo.
+    echo [*] Detecting file changes and sending notification...
+    %PYTHON_CMD% "%~dp0notify.py"
+)
 call :show_step_time "Total" "%SCRIPT_START_TIME%"
 
 echo.
@@ -509,3 +520,4 @@ for /f "tokens=*" %%d in ('%PYTHON_CMD% -c "import time; d=time.time()-float('%S
 if not defined STEP_DURATION set "STEP_DURATION=?"
 echo [*] %STEP_NAME% took: %STEP_DURATION%
 exit /b 0
+

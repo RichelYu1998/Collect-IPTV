@@ -1,4 +1,4 @@
-## 📡Collect-IPTV
+﻿## 📡Collect-IPTV
 初始版本基于 DeepSeek 与 ChatGPT 生成，最新版本使用 Gemini 与 GPT-5.3-Codex 持续优化；依托 GitHub 服务器进行源地址可用性与延迟测试，网页已更新台标展示，并支持去重与优选低延迟最佳 URL，M3U 播放列表每 4 小时自动更新。
 
 > ⚠️ 特别说明：因使用 GitHub 服务器，**不保证国内网络环境下的链接速度与可用性**。  
@@ -1648,3 +1648,105 @@ elif system == 'darwin':  # macOS
 ## 📚 相关文档
 
 - [skill.md](./skill.md) - 技术实现细节和配置说明
+
+---
+
+## 📧 邮件通知系统完善 (2026-07-01 续)
+
+### ✨ 新增功能
+
+#### Windows bat脚本邮件通知支持
+- **iptv_tool.bat** 现已完全支持文件变更检测和邮件通知
+- 与 **Linux/macOS (iptv_tool.sh)** 功能完全统一
+- 自动检测 est_sorted.m3u 和 est_sorted.m3u8 文件变更
+- 变更时自动发送邮件，并将这两个文件作为**附件**一同发送
+
+#### 双击运行修复
+- **问题**: 直接双击 iptv_tool.bat 会失败
+- **原因**: 工作目录停留在 script/ 文件夹，导致找不到 .venv、config/ 等目录
+- **修复**: 在脚本开头添加 cd /d "%~dp0.." 切换到项目根目录
+- **效果**: 现在可以正常双击运行，无需手动切换目录
+
+### 📋 功能对比
+
+| 功能 | Windows (bat) | Linux/macOS (sh) |
+|------|---------------|------------------|
+| **文件变更检测** | ✅ 已实现 | ✅ 已实现 |
+| **邮件通知** | ✅ 已实现 | ✅ 已实现 |
+| **附件发送** | ✅ 已实现 | ✅ 已实现 |
+| **双击/直接运行** | ✅ 已修复 | ✅ 正常 |
+| **调用 notify.py** | ✅ 第429-434行 | ✅ 第411-413行 |
+
+### 🔧 技术实现
+
+#### bat脚本关键代码 (iptv_tool.bat:429-434)
+`atch
+REM 检测文件变更并发送邮件通知（含附件）
+if exist "%~dp0notify.py" (
+    echo.
+    echo [*] Detecting file changes and sending notification...
+    %PYTHON_CMD% "%~dp0notify.py"
+)
+`
+
+#### 工作目录切换代码 (iptv_tool.bat:4-5)
+`atch
+@echo off
+setlocal enabledelayedexpansion
+
+REM 切换到项目根目录（解决双击运行时路径问题）
+cd /d "%~dp0.."
+`
+
+### 📧 邮件通知流程
+
+1. 运行采集脚本（bat或sh）
+2. 生成 est_sorted.m3u 和 est_sorted.m3u8 文件
+3. 自动调用 
+otify.py 检测文件变更
+4. 如果文件发生变化：
+   - 计算文件MD5并与上次对比
+   - 构建邮件正文（包含变更详情）
+   - 添加两个文件作为附件
+   - 发送到配置文件指定的邮箱
+
+### 📁 相关文件
+
+- **通知脚本**: [script/notify.py](./script/notify.py) - 核心检测和发送逻辑
+- **配置文件**: [config/notify.json](./config/notify.json) - SMTP服务器配置
+- **Windows脚本**: [script/iptv_tool.bat](./script/iptv_tool.bat) - 已更新 ✅
+- **Linux/macOS脚本**: [script/iptv_tool.sh](./script/iptv_tool.sh) - 已实现 ✅
+
+### ⚙️ 配置说明
+
+编辑 config/notify.json 配置邮件参数：
+- smtp_server: SMTP服务器地址
+- smtp_port: 端口（465=SSL, 587=STARTTLS）
+- sender_email: 发件人邮箱
+- uth_code: 授权码（非密码）
+- eceiver_email: 收件人邮箱
+- use_ssl: 是否使用SSL加密
+
+### 🎯 使用效果
+
+- **实时监控**: 每4小时自动检测文件变更
+- **即时通知**: 变更后立即发送邮件
+- **完整附件**: 收到邮件即可获取最新的M3U/M3U8文件
+- **跨平台一致**: Windows、Linux、macOS体验完全相同
+
+**验证结果:**
+`
+Generated M3U8 file: best_sorted.m3u8
+    File size: XXXX bytes
+
+[*] Detecting file changes and sending notification...
+[通知] 检测到 2 个文件变更:
+[通知]   + D:\ws\Collect-IPTV\file\best_sorted.m3u
+[通知]   + D:\ws\Collect-IPTV\file\best_sorted.m3u8
+[通知] 已添加附件: best_sorted.m3u
+[通知] 已添加附件: best_sorted.m3u8
+[通知] 邮件发送成功！
+`
+
+---
+

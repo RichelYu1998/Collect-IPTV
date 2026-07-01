@@ -1,4 +1,4 @@
-# 项目代码规范与范式 (Skill)
+﻿# 项目代码规范与范式 (Skill)
 
 > 本文档基于 Collect-IPTV 项目提炼，可作为同类 Python + Shell + GitHub Actions IPTV 采集项目的二开模版。
 
@@ -432,3 +432,183 @@ Serving: D:\\ws\\Collect-IPTV\\output                                           
 
 **最后更新**: 2026-07-01
 **版本**: v0.0.0 (FFmpeg 路径规范化完成)
+
+---
+
+## Windows bat脚本邮件通知与双击修复记录
+
+**修复时间**: 2026-07-01
+
+### 问题背景
+
+#### 1. bat脚本缺少邮件通知功能
+- **现象**: Linux/macOS的sh脚本支持邮件通知，但Windows的bat脚本不支持
+- **影响**: 跨平台功能不一致，Windows用户无法收到文件变更通知
+- **位置**: iptv_tool.bat 缺少调用 notify.py 的代码
+
+#### 2. 双击bat脚本失败
+- **现象**: 直接双击 iptv_tool.bat 运行会报错或找不到文件
+- **原因**: 工作目录停留在 script/ 文件夹，而非项目根目录
+- **影响**: 无法正常使用，用户体验差
+
+### 解决方案
+
+#### 1. 添加邮件通知功能 (iptv_tool.bat:429-434)
+
+**插入位置**: 生成M3U8文件之后，显示总时间之前
+
+**新增代码**:
+`atch
+REM 检测文件变更并发送邮件通知（含附件）
+if exist "%~dp0notify.py" (
+    echo.
+    echo [*] Detecting file changes and sending notification...
+    %PYTHON_CMD% "%~dp0notify.py"
+)
+`
+
+**对应sh脚本位置**: iptv_tool.sh:411-413
+
+`ash
+if [ -f "/script/notify.py" ]; then
+    echo "[*] 检测文件变更并发送通知..."
+     "/script/notify.py"
+fi
+`
+
+#### 2. 修复双击运行问题 (iptv_tool.bat:4-5)
+
+**插入位置**: setlocal enabledelayedexpansion 之后
+
+**新增代码**:
+`atch
+@echo off
+setlocal enabledelayedexpansion
+
+REM 切换到项目根目录（解决双击运行时路径问题）
+cd /d "%~dp0.."
+`
+
+**原理说明**:
+- %~dp0 = 当前bat文件所在目录 (D:\ws\Collect-IPTV\script\)
+- %~dp0.. = 上级目录 (D:\ws\Collect-IPTV\)
+- cd /d = 切换驱动器和目录（处理跨驱动器情况）
+
+### 技术细节
+
+#### notify.py 功能说明
+
+**核心函数**: send_email(config, changes)
+
+**附件添加逻辑**:
+`python
+# 遍历变更文件列表
+for filepath in attachment_files:
+    filename = os.path.basename(filepath)
+    
+    # 读取文件内容
+    with open(filepath, 'rb') as f:
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(f.read())
+    
+    # Base64编码
+    encoders.encode_base64(part)
+    
+    # 设置附件头
+    part.add_header(
+        'Content-Disposition',
+        f'attachment; filename="{filename}"'
+    )
+    
+    # 添加到邮件
+    msg.attach(part)
+`
+
+**支持的附件类型**:
+- best_sorted.m3u (M3U播放列表)
+- best_sorted.m3u8 (M3U8播放列表)
+- 其他配置文件（可扩展）
+
+#### 文件变更检测机制
+
+**检测方法**: MD5哈希对比
+
+**流程**:
+1. 读取上次保存的MD5值（存储在临时文件中）
+2. 计算当前文件的MD5
+3. 对比两个MD5值
+4. 如果不同 → 标记为已变更
+5. 更新MD5缓存
+6. 触发邮件发送
+
+**监控文件列表**:
+- D:\ws\Collect-IPTV\file\best_sorted.m3u
+- D:\ws\Collect-IPTV\file\best_sorted.m3u8
+
+### 跨平台一致性验证
+
+| 测试项 | Windows (bat) | Linux/macOS (sh) |
+|--------|---------------|------------------|
+| **工作目录切换** | ✅ cd /d "%~dp0.." | ✅ cd "" |
+| **notify.py调用** | ✅ 第429-434行 | ✅ 第411-413行 |
+| **路径变量** | %~dp0notify.py | /script/notify.py |
+| **输出语言** | 英文 | 中文 |
+| **附件发送** | ✅ 支持 | ✅ 支持 |
+| **双击运行** | ✅ 已修复 | ✅ 正常 |
+
+### Git提交信息
+
+**建议提交消息**:
+`
+feat: 完善Windows bat脚本邮件通知和双击运行修复
+
+- 新增iptv_tool.bat邮件通知功能（第429-434行）
+- 修复双击运行时工作目录问题（第4-5行）
+- 统一Windows/Linux/macOS跨平台体验
+- 支持best_sorted.m3u/m3u8作为邮件附件发送
+`
+
+**修改文件清单**:
+- script/iptv_tool.bat (+8行)
+- README.md (新增章节)
+- skill.md (新增章节)
+
+### 注意事项
+
+1. **权限要求**: 
+   - Windows: 需要管理员权限（某些情况下）
+   - Linux/macOS: 需要755执行权限
+
+2. **依赖检查**:
+   - 确保 config/notify.json 存在且格式正确
+   - 确保 script/notify.py 有执行权限
+   - 确保 .venv 虚拟环境已正确安装
+
+3. **调试技巧**:
+   `atch
+   # 手动测试notify.py
+   cd /d "D:\ws\Collect-IPTV"
+   .venv\Scripts\activate.bat
+   python script/notify.py
+   
+   # 查看详细日志
+   set DEBUG=1
+   script\iptv_tool.bat
+   `
+
+4. **常见问题**:
+   - **问题**: 邮件发送失败
+     **解决**: 检查notify.json中的SMTP配置和授权码
+   
+   - **问题**: 找不到notify.py
+     **解决**: 确认在script目录下存在该文件
+   
+   - **问题**: 附件过大被拒
+     **解决**: 检查邮箱服务商的附件大小限制（通常25MB）
+
+---
+
+**最后更新**: 2026-07-01  
+**版本**: v0.0.0 (邮件通知系统完善 + 双击修复完成)  
+**状态**: ✅ 已通过测试，可投入使用
+
