@@ -340,7 +340,7 @@ best_sorted.m3u/m3u8
 
 #### 播放器功能
 
-- ▶️ HLS流媒体播放
+- ▶️ MPEG-TS流媒体播放（基于mpegts.js）
 - 🔊 音量控制与静音
 - ⏯️ 播放/暂停切换
 - 📱 全屏模式支持
@@ -386,7 +386,7 @@ best_sorted.m3u/m3u8
 | 层级 | 技术 | 用途 |
 |------|------|------|
 | **前端** | HTML5 + CSS3 + JavaScript | 用户界面 |
-| **播放器** | HLS.js | 流媒体播放 |
+| **播放器** | mpegts.js | 流媒体播放 |
 | **后端** | Python 3.9+ | 业务逻辑 |
 | **框架** | aiohttp | 异步HTTP服务 |
 | **转码** | FFmpeg | 音视频处理 |
@@ -424,7 +424,7 @@ best_sorted.m3u/m3u8
 #### server.py - Web服务器
 - 静态文件服务
 - CORS代理转发
-- 音频实时转码
+- 音频实时转码（FFmpeg参数优化）
 - 流式代理传输
 
 #### iptv_tool.bat/sh - 启动脚本
@@ -540,6 +540,42 @@ Made with ❤️ by Collect-IPTV Team
 ---
 
 ## 📜 完整更新历史
+
+### v2.9.0 (2026-07-01) - 播放器升级 & FFmpeg优化 & 邮件检测增强
+
+#### ✨ 新功能
+- ✅ 播放器从HLS.js迁移到mpegts.js，直播流兼容性和稳定性大幅提升
+- ✅ mpegts.js直播优化配置：低延迟追帧、自动清理缓冲、禁用stash缓冲
+- ✅ FFmpeg转码参数全面优化：输入探测加速、错误恢复、多线程、分片自动清理
+- ✅ 邮件通知监控路径更新为file/目录下的m3u/m3u8文件
+- ✅ 邮件检测逻辑优化：首次运行发送一次，文件真正变更时才再次发送（无变化跳过）
+
+#### 🔧 优化改进 - mpegts.js播放器
+- 🎬 CDN从hls.js切换到mpegts.js@latest
+- 🎬 播放器初始化使用mpegts.createPlayer()，type='mse'，isLive=true
+- 🎬 主播放器配置：enableStashBuffer=false、stashInitialSize=128、liveBufferLatencyChasing=true
+- 🎬 转码播放器同样使用mpegts.js，统一播放架构
+- 🎬 事件监听从MANIFEST_PARSED改为METADATA_ARRIVED
+- 🎬 错误处理适配mpegts.js的ErrorTypes（NETWORK_ERROR/MEDIA_ERROR）
+- 🎬 媒体错误恢复策略：unload→load→play（替代HLS.js的recoverMediaError）
+- 🎬 销毁流程：unload→detachMediaElement→destroy（完整释放资源）
+- 🎬 函数重命名：destroyHls→destroyPlayer、checkAudioTracksFromHls→checkAudioTracksFromPlayer
+
+#### 🔧 优化改进 - FFmpeg参数
+- ⚡ 输入优化：-fflags +genpts+discardcorrupt（生成PTS+丢弃损坏包）
+- ⚡ 探测加速：-analyzeduration 5000000 -probesize 5000000（缩短启动时间）
+- ⚡ 交互禁用：-nostdin（避免阻塞）
+- ⚡ 延迟控制：-max_delay 0（最小化延迟）
+- ⚡ 多线程：-threads 0（自动利用所有CPU核心）
+- ⚡ 分片管理：-hls_flags delete_segments+append_list+independent_segments
+
+#### 🔧 优化改进 - 邮件通知
+- 📧 监控文件路径从根目录改为file/目录（file/best_sorted.m3u、file/best_sorted.m3u8）
+- 📧 修复变更检测逻辑：非首次运行时仅当文件哈希真正变化才发送邮件
+- 📧 无变化时正确跳过发送，避免重复邮件
+- 📧 bat/sh脚本已集成notify.py --once调用（采集完成后自动检测）
+
+---
 
 ### v1.0.0 (2026-07-01) - 正式发布
 
@@ -664,4 +700,3 @@ Made with ❤️ by Collect-IPTV Team
 - 🎉 跨平台IPTV采集工具，智能分类，质量筛选，自动更新
 
 ---
-

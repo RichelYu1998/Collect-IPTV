@@ -9,7 +9,7 @@
     <title>IPTV直播源监控 | 自动更新每4小时</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.min.js"></script>
     <script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
     <script>LA.init({id:"3NGg3QcrPGDkrBIP",ck:"3NGg3QcrPGDkrBIP",autoTrack:true})</script>
     <style>
@@ -496,7 +496,7 @@
 
         let currentPlayUrl = '';
         let currentPlayName = '';
-        let currentHls = null;
+        let currentPlayer = null;
         let currentTranscodeId = null;
         let retryCount = 0;
         let transcodeCheckTimer = null;
@@ -554,75 +554,67 @@
             overlay.classList.remove('hidden');
             overlay.classList.add('visible');
 
-            destroyHls();
+            destroyPlayer();
 
             const proxiedUrl = proxyUrl(url);
 
             probeAudioInfo(url);
 
-            if (Hls.isSupported()) {
-                currentHls = new Hls({
+            if (mpegts.isSupported()) {
+                currentPlayer = mpegts.createPlayer({
+                    type: 'mse',
+                    isLive: true,
+                    url: proxiedUrl,
+                }, {
                     enableWorker: true,
-                    lowLatencyMode: false,
-                    maxBufferLength: 60,
-                    maxMaxBufferLength: 120,
-                    liveSyncDurationCount: 3,
-                    liveMaxLatencyDurationCount: 10,
-                    liveDurationInfinity: true,
-                    highBufferWatchdogPeriod: 2,
-                    progressive: true,
-                    abrEwmaDefaultEstimate: 500000,
+                    enableStashBuffer: false,
+                    stashInitialSize: 128,
+                    lazyLoad: false,
+                    lazyLoadMaxDuration: 180,
+                    lazyLoadRecoverDuration: 30,
+                    deferLoadAfterSourceOpen: false,
+                    autoCleanupSourceBuffer: true,
+                    autoCleanupMaxBackwardDuration: 30,
+                    autoCleanupMinBackwardDuration: 10,
+                    liveBufferLatencyChasing: true,
+                    liveBufferLatencyChasingOnPaused: true,
+                    liveBufferLatencyMaxLatency: 6,
+                    liveBufferLatencyMinRemain: 0.5,
+                    liveSync: true,
+                    liveSyncMaxLatency: 6,
                 });
-                currentHls.loadSource(proxiedUrl);
-                currentHls.attachMedia(video);
-                currentHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                currentPlayer.attachMediaElement(video);
+                currentPlayer.load();
+                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => {
                     if (loading) loading.classList.add('hidden');
                     tryPlayWithSound(video);
-                    checkAudioTracksFromHls(data);
+                    checkAudioTracksFromPlayer(info);
                 });
-                currentHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
-                    checkAudioTracksFromHls(data);
-                });
-                currentHls.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) {
-                        if (loading) loading.classList.add('hidden');
-                        if (startBtn) startBtn.classList.add('hidden');
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                if (!currentTranscodeId && !retryCount) {
-                                    retryCount++;
-                                    console.log('Network error, attempting transcode...');
-                                    startAudioTranscode('');
-                                } else {
-                                    showPlayerError('直播源暂时不可用，请稍后重试或更换其他频道');
-                                    retryCount = 0;
-                                }
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
-                                    data.details === Hls.ErrorDetails.BUFFER_APPEND_ERROR) {
-                                    currentHls.startLoad();
-                                } else {
-                                    currentHls.recoverMediaError();
-                                }
-                                break;
-                            default:
-                                if (!currentTranscodeId && !retryCount) {
-                                    retryCount++;
-                                    console.log('Playback error, attempting transcode...');
-                                    startAudioTranscode('');
-                                } else {
-                                    showPlayerError('播放异常：' + (data.details || '未知错误'));
-                                    destroyHls();
-                                    retryCount = 0;
-                                }
-                                break;
-                        }
-                    } else if (data.details && data.details.indexOf('audio') !== -1) {
-                        if (!currentTranscodeId) {
+                currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
+                    if (loading) loading.classList.add('hidden');
+                    if (startBtn) startBtn.classList.add('hidden');
+                    const errType = detail && detail.type ? detail.type : type;
+                    const errDetail = detail && detail.info ? detail.info : detail;
+                    if (errType === mpegts.ErrorTypes.NETWORK_ERROR) {
+                        if (!currentTranscodeId && !retryCount) {
+                            retryCount++;
+                            console.log('Network error, attempting transcode...');
                             startAudioTranscode('');
                         } else {
-                            showAudioWarning('音频解码失败，该频道可能使用了浏览器不支持的音频编码');
+                            showPlayerError('直播源暂时不可用，请稍后重试或更换其他频道');
+                            retryCount = 0;
+                        }
+                    } else if (errType === mpegts.ErrorTypes.MEDIA_ERROR) {
+                        console.log('Media error, attempting recovery...');
+                    } else {
+                        if (!currentTranscodeId && !retryCount) {
+                            retryCount++;
+                            console.log('Playback error, attempting transcode...');
+                            startAudioTranscode('');
+                        } else {
+                            showPlayerError('播放异常：' + (errDetail || '未知错误'));
+                            destroyPlayer();
+                            retryCount = 0;
                         }
                     }
                 });
@@ -638,26 +630,25 @@
                 }, { once: true });
             } else {
                 if (loading) loading.classList.add('hidden');
-                showPlayerError('您的浏览器不支持 HLS 播放');
+                showPlayerError('您的浏览器不支持 MPEG-TS 播放');
             }
         }
 
-        function checkAudioTracksFromHls(data) {
-            if (!currentHls || currentTranscodeId) return;
+        function checkAudioTracksFromPlayer(info) {
+            if (!currentPlayer || currentTranscodeId) return;
 
-            const levels = currentHls.levels || [];
-            for (const level of levels) {
-                if (level.audioCodec) {
-                    const codec = level.audioCodec.toLowerCase();
-                    if (codec.indexOf('ac-3') !== -1 || codec.indexOf('ac3') !== -1 ||
-                        codec.indexOf('ec-3') !== -1 || codec.indexOf('eac3') !== -1) {
-                        if (audioProbeAbort) {
-                            audioProbeAbort.abort();
-                            audioProbeAbort = null;
-                        }
-                        startAudioTranscode(level.audioCodec);
-                        return;
+            const tracks = (info && info.audioTracks) || [];
+            if (tracks.length === 0) return;
+            for (const track of tracks) {
+                const codec = (track.codec || track.audioCodec || '').toLowerCase();
+                if (codec.indexOf('ac-3') !== -1 || codec.indexOf('ac3') !== -1 ||
+                    codec.indexOf('ec-3') !== -1 || codec.indexOf('eac3') !== -1) {
+                    if (audioProbeAbort) {
+                        audioProbeAbort.abort();
+                        audioProbeAbort = null;
                     }
+                    startAudioTranscode(codec);
+                    return;
                 }
             }
         }
@@ -677,7 +668,7 @@
                 });
                 const data = await resp.json();
 
-                if (!currentHls || currentPlayUrl !== url) return;
+                if (!currentPlayer || currentPlayUrl !== url) return;
 
                 if (data.error) {
                     audioWarning.classList.add('hidden');
@@ -698,7 +689,7 @@
                 audioWarning.classList.add('hidden');
             } catch (e) {
                 if (e.name === 'AbortError') return;
-                if (audioWarning && currentHls && currentPlayUrl === url) {
+                if (audioWarning && currentPlayer && currentPlayUrl === url) {
                     audioWarning.classList.add('hidden');
                 }
             }
@@ -839,44 +830,54 @@
             const statusText = document.getElementById('transcodeStatusText');
             if (statusText) statusText.textContent = '连接中...';
 
-            if (currentHls) {
-                currentHls.destroy();
-                currentHls = null;
+            if (currentPlayer) {
+                currentPlayer.unload();
+                currentPlayer.detachMediaElement();
+                currentPlayer.destroy();
+                currentPlayer = null;
             }
 
             const transcodeUrl = '/tstream/' + currentTranscodeId + '/index.m3u8';
             console.log('[Transcode] Loading transcoded URL:', transcodeUrl);
 
-            if (Hls.isSupported()) {
-                currentHls = new Hls({
+            if (mpegts.isSupported()) {
+                currentPlayer = mpegts.createPlayer({
+                    type: 'mse',
+                    isLive: true,
+                    url: transcodeUrl,
+                }, {
                     enableWorker: true,
-                    lowLatencyMode: false,
-                    maxBufferLength: 60,
-                    maxMaxBufferLength: 120,
-                    liveSyncDurationCount: 3,
-                    liveMaxLatencyDurationCount: 10,
-                    liveDurationInfinity: true,
-                    highBufferWatchdogPeriod: 2,
-                    progressive: true,
-                    abrEwmaDefaultEstimate: 500000,
+                    enableStashBuffer: false,
+                    stashInitialSize: 128,
+                    lazyLoad: false,
+                    autoCleanupSourceBuffer: true,
+                    autoCleanupMaxBackwardDuration: 30,
+                    autoCleanupMinBackwardDuration: 10,
+                    liveBufferLatencyChasing: true,
+                    liveBufferLatencyMaxLatency: 6,
+                    liveBufferLatencyMinRemain: 0.5,
+                    liveSync: true,
+                    liveSyncMaxLatency: 6,
                 });
-                currentHls.loadSource(transcodeUrl);
-                currentHls.attachMedia(video);
-                currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                currentPlayer.attachMediaElement(video);
+                currentPlayer.load();
+                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, () => {
                     console.log('[Transcode] Transcoded stream manifest loaded successfully');
                     hideTranscodeIndicator();
                     if (loading) loading.classList.add('hidden');
                     tryPlayWithSound(video);
                 });
-                currentHls.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) {
-                        console.error('[Transcode] Error playing transcoded stream:', data);
+                currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
+                    const errType = detail && detail.type ? detail.type : type;
+                    if (errType === mpegts.ErrorTypes.MEDIA_ERROR) {
+                        console.log('[Transcode] Media error, attempting reload...');
+                        currentPlayer.unload();
+                        currentPlayer.load();
+                        currentPlayer.play();
+                    } else {
+                        console.error('[Transcode] Error playing transcoded stream:', detail);
                         if (loading) loading.classList.add('hidden');
-                        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                            currentHls.recoverMediaError();
-                        } else {
-                            showPlayerError('直播流异常中断，请重试');
-                        }
+                        showPlayerError('直播流异常中断，请重试');
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -923,7 +924,7 @@
         function checkAudioTracksDelayed() {
             const video = document.getElementById('videoPlayer');
             const audioWarning = document.getElementById('audioWarning');
-            if (!video || !currentHls || !audioWarning) return;
+            if (!video || !currentPlayer || !audioWarning) return;
 
             if (!audioWarning.classList.contains('hidden')) return;
 
@@ -975,10 +976,12 @@
             }
         }
 
-        function destroyHls() {
-            if (currentHls) {
-                currentHls.destroy();
-                currentHls = null;
+        function destroyPlayer() {
+            if (currentPlayer) {
+                currentPlayer.unload();
+                currentPlayer.detachMediaElement();
+                currentPlayer.destroy();
+                currentPlayer = null;
             }
             if (audioProbeAbort) {
                 audioProbeAbort.abort();
@@ -1010,7 +1013,7 @@
             if (startBtn) startBtn.classList.add('hidden');
             hideTranscodeIndicator();
             stopTranscode();
-            destroyHls();
+            destroyPlayer();
         }
 
         function retryPlay() {
@@ -1042,7 +1045,7 @@
         document.addEventListener('click', () => {
             const video = document.getElementById('videoPlayer');
             const startBtn = document.getElementById('startPlayBtn');
-            if (video && video.muted && !video.paused && currentHls) {
+            if (video && video.muted && !video.paused && currentPlayer) {
                 video.muted = false;
                 updateVolumeUI();
                 if (startBtn) startBtn.classList.add('hidden');
@@ -1106,4 +1109,3 @@
     </div>
 </body>
 </html>
-

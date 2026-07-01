@@ -69,7 +69,7 @@ def file_hash(filepath):
 
 
 def detect_changes(config):
-    watch_files = config.get('watch_files', ['best_sorted.m3u', 'best_sorted.m3u8'])
+    watch_files = config.get('watch_files', ['file/best_sorted.m3u', 'file/best_sorted.m3u8'])
     old_hashes = load_hashes()
     new_hashes = {}
     changes = []
@@ -198,44 +198,54 @@ def send_email(config, changes):
 
 def check_and_notify(config):
     """检测变更并发送邮件（含附件）- 首次或变化即发送"""
-    watch_files = config.get('watch_files', ['best_sorted.m3u', 'best_sorted.m3u8'])
+    watch_files = config.get('watch_files', ['file/best_sorted.m3u', 'file/best_sorted.m3u8'])
     old_hashes = load_hashes()
     
-    # 检查是否有历史记录（首次运行）
     is_first_run = (not old_hashes or len(old_hashes) == 0)
     
-    # 查找存在的文件
-    existing_files = []
+    changed_files = []
     for fname in watch_files:
         fpath = PROJECT_ROOT / fname
         if fpath.exists():
             current_hash = file_hash(str(fpath))
             if current_hash:
-                existing_files.append({
-                    'file': fname,
-                    'type': 'new' if is_first_run else 'updated',
-                    'detail': '首次生成文件' if is_first_run else '文件已更新',
-                    'filepath': str(fpath),
-                    'hash': current_hash
-                })
+                old_hash = old_hashes.get(fname)
                 
-                # 更新哈希记录
-                old_hashes[fname] = current_hash
+                if is_first_run or old_hash is None:
+                    changed_files.append({
+                        'file': fname,
+                        'type': 'new',
+                        'detail': '首次检测到文件',
+                        'filepath': str(fpath),
+                        'hash': current_hash
+                    })
+                    old_hashes[fname] = current_hash
+                elif old_hash != current_hash:
+                    size = os.path.getsize(str(fpath))
+                    changed_files.append({
+                        'file': fname,
+                        'type': 'updated',
+                        'detail': f'文件已变更 (大小: {size} 字节)',
+                        'filepath': str(fpath),
+                        'hash': current_hash
+                    })
+                    old_hashes[fname] = current_hash
     
-    # 如果没有找到任何文件
-    if not existing_files:
+    if not changed_files:
         if is_first_run:
             print('[通知] 首次运行，未找到监控文件')
+        else:
+            print('[通知] 文件无变化，跳过发送')
         return False
     
     # 显示检测到的文件
     action_type = "首次运行" if is_first_run else "文件变更"
-    print(f'[通知] {action_type} - 检测到 {len(existing_files)} 个文件:')
-    for f in existing_files:
+    print(f'[通知] {action_type} - 检测到 {len(changed_files)} 个文件:')
+    for f in changed_files:
         print(f'    [{f["type"]}] {f["file"]} - {f["detail"]}')
     
     # 直接发送邮件（无冷却限制）
-    success = send_email(config, existing_files)
+    success = send_email(config, changed_files)
     
     if success:
         # 保存最新的哈希记录
@@ -299,6 +309,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-

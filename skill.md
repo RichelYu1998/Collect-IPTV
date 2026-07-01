@@ -914,4 +914,177 @@ ffmpeg/
 ---
 
 **最后更新**: 2026-07-01
-**版本**: v2.8.0 (预加载全面升级 & 转码异步预加载)
+**版本**: v2.9.0 (播放器升级mpegts.js & FFmpeg优化 & 邮件检测增强)
+
+---
+
+## v2.9.0 变更记录 - 播放器升级 & FFmpeg优化 & 邮件检测增强
+
+**变更时间**: 2026-07-01
+
+### 一、播放器从HLS.js迁移到mpegts.js
+
+#### 1.1 CDN替换
+
+```html
+<!-- 旧 -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<!-- 新 -->
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.min.js"></script>
+```
+
+#### 1.2 播放器初始化
+
+```javascript
+// 旧: HLS.js
+if (Hls.isSupported()) {
+    currentHls = new Hls({ enableWorker: true, ... });
+    currentHls.loadSource(url);
+    currentHls.attachMedia(video);
+    currentHls.on(Hls.Events.MANIFEST_PARSED, () => { ... });
+}
+
+// 新: mpegts.js
+if (mpegts.isSupported()) {
+    currentPlayer = mpegts.createPlayer({
+        type: 'mse',
+        isLive: true,
+        url: url,
+    }, {
+        enableWorker: true,
+        enableStashBuffer: false,
+        stashInitialSize: 128,
+        lazyLoad: false,
+        autoCleanupSourceBuffer: true,
+        autoCleanupMaxBackwardDuration: 30,
+        autoCleanupMinBackwardDuration: 10,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 6,
+        liveBufferLatencyMinRemain: 0.5,
+        liveSync: true,
+        liveSyncMaxLatency: 6,
+    });
+    currentPlayer.attachMediaElement(video);
+    currentPlayer.load();
+    currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => { ... });
+}
+```
+
+#### 1.3 关键API差异
+
+| 功能 | HLS.js | mpegts.js |
+|------|--------|-----------|
+| 创建 | `new Hls(config)` | `mpegts.createPlayer({type, isLive, url}, config)` |
+| 加载源 | `loadSource(url)` + `attachMedia(video)` | `attachMediaElement(video)` + `load()` |
+| 事件 | `Hls.Events.MANIFEST_PARSED` | `mpegts.Events.METADATA_ARRIVED` |
+| 错误 | `Hls.Events.ERROR` + `data.fatal` | `mpegts.Events.ERROR` + `ErrorTypes` |
+| 恢复 | `recoverMediaError()` | `unload()` + `load()` + `play()` |
+| 销毁 | `destroy()` | `unload()` + `detachMediaElement()` + `destroy()` |
+| 音频检测 | `currentHls.levels[i].audioCodec` | `info.audioTracks[i].codec` |
+
+#### 1.4 函数重命名
+
+| 旧名 | 新名 |
+|------|------|
+| `currentHls` | `currentPlayer` |
+| `destroyHls()` | `destroyPlayer()` |
+| `checkAudioTracksFromHls()` | `checkAudioTracksFromPlayer()` |
+
+#### 1.5 mpegts.js直播优化配置说明
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `enableStashBuffer` | false | 禁用缓冲区暂存，降低延迟 |
+| `stashInitialSize` | 128 | 初始暂存大小（KB），极小值 |
+| `lazyLoad` | false | 禁用懒加载，立即处理数据 |
+| `autoCleanupSourceBuffer` | true | 自动清理已播放的缓冲区 |
+| `autoCleanupMaxBackwardDuration` | 30 | 保留最近30秒回放缓冲 |
+| `autoCleanupMinBackwardDuration` | 10 | 最少保留10秒回放缓冲 |
+| `liveBufferLatencyChasing` | true | 追帧：跳过过多缓冲 |
+| `liveBufferLatencyMaxLatency` | 6 | 最大允许延迟6秒 |
+| `liveBufferLatencyMinRemain` | 0.5 | 追帧后最少保留0.5秒 |
+| `liveSync` | true | 直播同步模式 |
+| `liveSyncMaxLatency` | 6 | 同步最大延迟6秒 |
+
+### 二、FFmpeg参数优化
+
+#### 2.1 输入优化参数
+
+```python
+cmd = [
+    FFMPEG_PATH,
+    '-nostdin',                                    # 禁用标准输入交互
+    '-re',                                         # 按原始帧率读取
+    '-fflags', '+genpts+discardcorrupt',           # 生成PTS + 丢弃损坏包
+    '-analyzeduration', '5000000',                 # 缩短探测时间(5秒)
+    '-probesize', '5000000',                       # 缩短探测大小(5MB)
+    '-i', url,
+]
+```
+
+#### 2.2 输出优化参数
+
+```python
+    '-max_delay', '0',                             # 最小化延迟
+    '-threads', '0',                               # 自动多线程
+    '-hls_flags', 'delete_segments+append_list+independent_segments',
+    '-loglevel', 'error',                          # 仅输出错误
+```
+
+#### 2.3 参数说明
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `-nostdin` | - | 禁用标准输入，避免FFmpeg等待用户输入导致阻塞 |
+| `-fflags +genpts` | - | 为缺少PTS的包生成时间戳，修复时间戳缺失问题 |
+| `-fflags +discardcorrupt` | - | 丢弃损坏的数据包，避免播放异常 |
+| `-analyzeduration 5000000` | 5秒 | 缩短格式探测时间，加快启动速度 |
+| `-probesize 5000000` | 5MB | 缩短探测数据量，加快启动速度 |
+| `-max_delay 0` | - | 最小化复用延迟，适合直播场景 |
+| `-threads 0` | 自动 | 自动使用所有可用CPU核心 |
+| `delete_segments` | - | 自动删除过期TS分片，节省磁盘 |
+| `append_list` | - | 追加模式更新播放列表，减少完整重写 |
+| `independent_segments` | - | 标记分片独立可解码，提升兼容性 |
+
+### 三、邮件通知增强
+
+#### 3.1 监控路径更新
+
+```json
+// 旧
+"watch_files": ["best_sorted.m3u", "best_sorted.m3u8"]
+
+// 新
+"watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
+```
+
+#### 3.2 变更检测逻辑修复
+
+**问题**: 旧逻辑在非首次运行时，对所有存在的文件都标记为"updated"并发送邮件，即使文件没有变化。
+
+**修复**: 仅当文件哈希真正变化时才标记为变更并发送邮件。
+
+```python
+# 旧逻辑（有Bug）
+if is_first_run:
+    type = 'new'
+else:
+    type = 'updated'  # 所有文件都标记为updated！
+
+# 新逻辑（修复后）
+if is_first_run or old_hash is None:
+    type = 'new'       # 首次检测
+elif old_hash != current_hash:
+    type = 'updated'   # 真正变更
+else:
+    # 跳过，不发送邮件
+```
+
+#### 3.3 发送策略
+
+| 场景 | 行为 |
+|------|------|
+| 首次运行（无历史哈希） | 发送邮件，标记为"首次检测到文件" |
+| 文件哈希变化 | 发送邮件，标记为"文件已变更" |
+| 文件无变化 | 跳过，不发送邮件 |
+| 文件不存在 | 跳过 |
