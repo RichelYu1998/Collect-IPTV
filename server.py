@@ -75,12 +75,12 @@ def get_ffmpeg_platform_dir():
         
         if prebuilt_dir.exists():
             print(f"[*] 使用预编译 FFmpeg: {prebuilt_dir}")
-            return prebuilt_dir
+            return prebuilt_dir.resolve()  # 规范化路径
         
         # 回退到 .venv 目录（兼容旧版或自动安装）
         fallback_dir = PROJECT_ROOT / '.venv' / 'ffmpeg'
         print(f"[*] 使用 .venv FFmpeg 目录: {fallback_dir}")
-        return fallback_dir
+        return fallback_dir.resolve()  # 规范化路径
         
     except Exception as e:
         print(f"[!] 检测系统失败，使用默认路径: {e}")
@@ -704,7 +704,7 @@ def find_ffmpeg():
         prebuilt_ffmpeg = get_ffmpeg_platform_dir() / f'ffmpeg{ext}'
         if prebuilt_ffmpeg.exists():
             print(f"[*] 找到预编译 FFmpeg: {prebuilt_ffmpeg}")
-            return str(prebuilt_ffmpeg)
+            return str(prebuilt_ffmpeg.resolve())  # 规范化路径，消除 ..
     except Exception as e:
         print(f"[!] 检测预编译 FFmpeg 失败: {e}")
 
