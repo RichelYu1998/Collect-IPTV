@@ -796,13 +796,14 @@ def probe_audio_info(url):
             '-print_format', 'json',
             '-show_streams',
             '-select_streams', 'a',
-            '-analyzeduration', '2000000',
-            '-probesize', '2000000',
+            '-analyzeduration', '500000',
+            '-probesize', '500000',
             '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            '-timeout', '5000000',
-            '-rw_timeout', '5000000',
+            '-timeout', '3000000',
+            '-rw_timeout', '3000000',
             '-fflags', '+genpts+discardcorrupt+fastseek',
             '-max_delay', '0',
+            '-threads', '1',
             url,
         ]
 
@@ -810,7 +811,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 10,
+                'timeout': 5,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -838,13 +839,14 @@ def probe_audio_info(url):
         cmd = [
             FFMPEG_PATH,
             '-nostdin',
-            '-fflags', '+genpts+discardcorrupt',
-            '-analyzeduration', '2000000',
-            '-probesize', '2000000',
+            '-fflags', '+genpts+discardcorrupt+fastseek',
+            '-analyzeduration', '500000',
+            '-probesize', '500000',
             '-i', url,
             '-hide_banner',
             '-t', '0',
             '-f', 'null',
+            '-threads', '1',
             '-',
         ]
 
@@ -852,7 +854,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 10,
+                'timeout': 5,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -893,8 +895,8 @@ def _probe_audio_fast(url):
 
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = resp.read(8192)
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = resp.read(4096)
         text = data.decode('utf-8', errors='replace')
 
         if '#EXTINF' not in text and '#EXT-X-' not in text:
@@ -915,8 +917,8 @@ def _probe_audio_fast(url):
 
         seg_req = urllib.request.Request(seg_url)
         seg_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        with urllib.request.urlopen(seg_req, timeout=8) as seg_resp:
-            seg_data = seg_resp.read(262144)
+        with urllib.request.urlopen(seg_req, timeout=4) as seg_resp:
+            seg_data = seg_resp.read(65536)
 
         if len(seg_data) < 188:
             return None
@@ -985,38 +987,40 @@ def _probe_audio_fast(url):
             cmd = [
                 FFMPEG_PATH,
                 '-nostdin',
-                '-fflags', '+genpts+discardcorrupt',
-                '-analyzeduration', '2000000',
-                '-probesize', '1000000',
+                '-fflags', '+genpts+discardcorrupt+fastseek',
+                '-analyzeduration', '500000',
+                '-probesize', '500000',
                 '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 '-i', url,
                 '-hide_banner',
                 '-t', '0',
                 '-f', 'null',
+                '-threads', '1',
                 '-',
             ]
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 12,
+                'timeout': 6,
             }
         else:
             cmd = [
                 FFMPEG_PATH,
                 '-nostdin',
-                '-fflags', '+genpts+discardcorrupt',
-                '-analyzeduration', '1000000',
+                '-fflags', '+genpts+discardcorrupt+fastseek',
+                '-analyzeduration', '500000',
                 '-probesize', '500000',
                 '-i', url,
                 '-hide_banner',
                 '-t', '0',
                 '-f', 'null',
+                '-threads', '1',
                 '-',
             ]
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 8,
+                'timeout': 5,
             }
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW

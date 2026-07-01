@@ -125,11 +125,11 @@ Python原生TS流解析器，非加密流无需ffprobe/ffmpeg：
 
 `_probe_audio_fast()` → `ffprobe` → `ffmpeg -i` → 返回错误
 
-- 非加密流：约1-2秒（快速探测）
-- 加密流：约8-12秒（ffmpeg探测，较大probesize）
-- ffprobe：analyzeduration/probesize 2M，超时10秒
-- ffmpeg加密流：probesize 1M，超时12秒
-- ffmpeg非加密流：probesize 500K，超时8秒
+- 非加密流：约0.5-1秒（快速探测）
+- 加密流：约3-5秒（ffmpeg探测）
+- ffprobe：analyzeduration/probesize 500K，超时5秒
+- ffmpeg加密流：probesize 500K，超时6秒
+- ffmpeg非加密流：probesize 500K，超时5秒
 
 ### FFmpeg 转码参数
 
