@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # ========================================
 # IPTV 直播源采集工具 - Linux/macOS
@@ -186,12 +186,21 @@ detect_ffmpeg() {
         return 0
     fi
 
-    FFMPEG_DIR="$WORK_DIR/.venv/ffmpeg"
-    if [ -x "$FFMPEG_DIR/bin/ffmpeg" ]; then
-        echo "[*] 在虚拟环境中找到 FFmpeg: $FFMPEG_DIR"
-        export PATH="$FFMPEG_DIR/bin:$PATH"
-        ffmpeg -version 2>&1 | head -1
-        return 0
+    # 优先检查项目根目录下的预编译版本
+    if [ -x "$WORK_DIR/ffmpeg/linux/bin/ffmpeg" ] || [ -x "$WORK_DIR/ffmpeg/macos/bin/ffmpeg" ]; then
+        # Linux 或 macOS 预编译版本
+        for platform_dir in "linux" "macos"; do
+            FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
+            if [ -x "$FFMPEG_PREBUILT/ffmpeg" ]; then
+                echo "[*] 使用预编译 FFmpeg: $FFMPEG_PREBUILT"
+                export PATH="$FFMPEG_PREBUILT:$PATH"
+                ffmpeg -version 2>&1 | head -1
+                return 0
+            fi
+        done
+    fi
+
+    # 回退到虚拟环境中的旧版路径
     fi
 
     echo "未找到 FFmpeg，正在通过跨平台安装工具安装..."
@@ -205,6 +214,20 @@ detect_ffmpeg() {
         return 0
     fi
 
+    # 优先检查预编译版本目录
+    if [ -x "$WORK_DIR/ffmpeg/linux/bin/ffmpeg" ] || [ -x "$WORK_DIR/ffmpeg/macos/bin/ffmpeg" ]; then
+        for platform_dir in "linux" "macos"; do
+            FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
+            if [ -x "$FFMPEG_PREBUILT/ffmpeg" ]; then
+                export PATH="$FFMPEG_PREBUILT:$PATH"
+                echo "[*] FFmpeg 安装成功 (预编译版本):"
+                ffmpeg -version 2>&1 | head -1
+                return 0
+            fi
+        done
+    fi
+    
+    # 回退到 .venv 目录或系统路径
     if [ -x "$FFMPEG_DIR/bin/ffmpeg" ]; then
         export PATH="$FFMPEG_DIR/bin:$PATH"
         echo "[*] FFmpeg 安装成功:"

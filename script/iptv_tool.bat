@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal enabledelayedexpansion
 chcp 65001 > nul 2>&1
 set PYTHONIOENCODING=utf-8
@@ -172,7 +172,15 @@ if not errorlevel 1 (
     ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
     goto :eof
 )
+:: 优先检查项目根目录下的预编译版本
+if exist "%CD%\ffmpeg\windows\bin\ffmpeg.exe" (
+    echo [*] 使用预编译 FFmpeg: %CD%\ffmpeg\windows\bin
+    set "PATH=%CD%\ffmpeg\windows\bin;%PATH%"
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
+)
 
+:: 回退到虚拟环境中的旧版路径
 if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
     echo [*] 在虚拟环境中找到 FFmpeg: %CD%\.venv\ffmpeg
     set "PATH=%CD%\.venv\ffmpeg\bin;%PATH%"
@@ -180,19 +188,41 @@ if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
     goto :eof
 )
 
+
+
+
+
+
+
+
 echo [*] 正在通过跨平台安装工具安装 FFmpeg...
 %PYTHON_CMD% "%~dp0..\server.py" --setup-ffmpeg
 if errorlevel 1 (
     echo [警告] FFmpeg 自动安装失败，浏览器中 AC3/EAC3 音频将无声音
     goto :eof
 )
+:: 优先检查预编译版本目录
+if exist "%CD%\ffmpeg\windows\bin\ffmpeg.exe" (
+    set "PATH=%CD%\ffmpeg\windows\bin;%PATH%"
+    echo [*] FFmpeg 安装成功 (预编译版本):
+    ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
+    goto :eof
+)
 
+:: 回退到 .venv 目录
 if exist "%CD%\.venv\ffmpeg\bin\ffmpeg.exe" (
     set "PATH=%CD%\.venv\ffmpeg\bin;%PATH%"
     echo [*] FFmpeg 安装成功:
     ffmpeg -version 2>nul ^| findstr /i "ffmpeg version"
     goto :eof
 )
+
+
+
+
+
+
+
 
 goto :eof
 
