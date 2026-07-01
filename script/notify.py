@@ -106,10 +106,126 @@ def detect_changes(config):
 def send_email(config, changes):
     email_provider = config.get('email_provider', 'smtp').lower()
     
-    if email_provider == 'resend':
+    if email_provider == 'sendgrid':
+        return send_email_sendgrid(config, changes)
+    elif email_provider == 'resend':
         return send_email_resend(config, changes)
     else:
         return send_email_smtp(config, changes)
+
+
+def send_email_sendgrid(config, changes):
+    import urllib.request
+    import urllib.error
+    import json as json_module
+    
+    api_key = config.get('sendgrid_api_key', '')
+    from_email = config.get('sendgrid_from_email', 'noreply@github-actions.com')
+    from_name = config.get('email_from_name', 'IPTV直播源监控')
+    to_email = config.get('email_to', '')
+    
+    if not api_key or not to_email:
+        print('[通知] SendGrid 配置不完整（需要 sendgrid_api_key 和 email_to），跳过发送')
+        return False
+    
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    change_count = len(changes)
+    
+    # 构建邮件正文
+    body_lines = [f'IPTV直播源文件变更通知', '', f'时间: {current_time}', '']
+    for c in changes:
+        tag = '新增' if c['type'] == 'new' else '变更'
+        body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
+    
+    attachment_files = []
+    for c in changes:
+        filepath = c.get('filepath', '')
+        if filepath and os.path.exists(filepath):
+            attachment_files.append(filepath)
+    
+    body_lines.append('')
+    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    for fpath in attachment_files:
+        fname = os.path.basename(fpath)
+        body_lines.append(f'  - {fname}')
+    
+    body_lines.append('')
+    body_lines.append('请查收附件中的最新直播源文件。')
+    body_text = '\n'.join(body_lines)
+    
+    # 准备附件（Base64编码）
+    attachments = []
+    for filepath in attachment_files:
+        try:
+            with open(filepath, 'rb') as f:
+                file_content = base64.b64encode(f.read()).decode('utf-8')
+                filename = os.path.basename(filepath)
+                attachments.append({
+                    'content': file_content,
+                    'type': 'application/octet-stream',
+                    'filename': filename,
+                    'disposition': 'attachment'
+                })
+                print(f'[通知] 已准备附件: {filename}')
+        except Exception as e:
+            print(f'[通知] 读取附件失败 {filepath}: {e}')
+    
+    # 构建 SendGrid API 请求
+    payload = {
+        'personalizations': [
+            {
+                'to': [{'email': to_email}],
+                'subject': f'[IPTV直播源监控] 检测到{change_count}个文件变化 - {current_time}'
+            }
+        ],
+        'from': {
+            'email': from_email,
+            'name': from_name
+        },
+        'content': [
+            {
+                'type': 'text/plain',
+                'value': body_text
+            }
+        ],
+        'attachments': attachments
+    }
+    
+    try:
+        print('[通知] 正在通过 SendGrid API 发送邮件...')
+        
+        data = json_module.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            'https://api.sendgrid.com/v3/mail/send',
+            data=data,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            method='POST'
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
+            status_code = response.getcode()
+            
+        if status_code in [200, 202]:
+            print(f'[通知] ✓ 邮件已成功发送至 {to_email} (SendGrid API)')
+            print(f'[通知] HTTP Status: {status_code} (Accepted)')
+            return True
+        else:
+            print(f'[通知] SendGrid 返回异常状态码: {status_code}')
+            return False
+        
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else ''
+        print(f'[通知] SendGrid API HTTP 错误 {e.code}: {error_body}')
+        return False
+    except urllib.error.URLError as e:
+        print(f'[通知] SendGrid API 网络错误: {e.reason}')
+        return False
+    except Exception as e:
+        print(f'[通知] SendGrid API 发送失败: {e}')
+        return False
 
 
 def send_email_resend(config, changes):
