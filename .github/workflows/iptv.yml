@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      IPTV_TIMEOUT: 3
+      IPTV_MAX_PARALLEL: 200
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
