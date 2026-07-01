@@ -698,6 +698,17 @@ def find_ffmpeg():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     ext = '.exe' if os.name == 'nt' else ''
 
+
+    # 优先使用项目根目录下的预编译版本
+    try:
+        prebuilt_ffmpeg = get_ffmpeg_platform_dir() / f'ffmpeg{ext}'
+        if prebuilt_ffmpeg.exists():
+            print(f"[*] 找到预编译 FFmpeg: {prebuilt_ffmpeg}")
+            return str(prebuilt_ffmpeg)
+    except Exception as e:
+        print(f"[!] 检测预编译 FFmpeg 失败: {e}")
+
+    # 回退到虚拟环境中的旧版路径（兼容）
     venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', f'ffmpeg{ext}')
     if os.path.isfile(venv_ffmpeg):
         return venv_ffmpeg
