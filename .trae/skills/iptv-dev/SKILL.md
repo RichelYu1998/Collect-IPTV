@@ -171,12 +171,79 @@ cmd = [
 ### 邮件通知 (notify.py)
 
 - 监控文件：`file/best_sorted.m3u`、`file/best_sorted.m3u8`
-- 哈希存储：`config/.notify_hashes.json`
+- 哈希存储：`config/.notify_hashes.json`（持久化到 Git 仓库）
 - 首次运行：发送邮件（标记为"new"）
 - 文件变更（哈希不同）：发送邮件（标记为"updated"）
 - 无变化：跳过发送
 - 脚本调用：采集完成后执行 `notify.py --once`
 - 配置：`config/notify.json`
+- GitHub Actions：workflow 中自动调用，哈希记录提交到仓库
+
+### GitHub Actions 工作流 (.github/workflows/iptv.yml)
+
+**核心功能**：
+- 自动化 CI/CD 流程（每 4 小时或手动触发）
+- 完整流程：采集 → 生成 → 更新 README → 提交推送 → 邮件通知 → 保存哈希
+- 极速运行：47-90 秒（性能优化后）
+
+**关键配置**：
+```yaml
+permissions:
+  contents: write                    # 允许 GITHUB_TOKEN 写入仓库
+
+env:
+  IPTV_TIMEOUT: 3                    # 单流测试超时 3 秒（与本地一致）
+  IPTV_MAX_PARALLEL: 200             # 并发数 200（与本地一致）
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true  # 消除 Node.js 弃用警告
+```
+
+**工作流步骤**：
+1. **Checkout repository**: `fetch-depth: 0` + token 用于后续推送
+2. **Set up Python**: Python 3.10
+3. **Install dependencies**: aiohttp
+4. **Run scraping script**: 执行 iptv.py 采集 IPTV 源
+5. **GetTime**: 获取当前时间戳
+6. **Update README.md**: sed 替换时间和链接占位符
+7. **Commit and push changes**:
+   - 文件存在性检查
+   - `git add -f file/best_sorted.m3u` 强制添加（绕过 .gitignore）
+   - `git add -f file/best_sorted.m3u8` 强制添加
+   - 动态分支引用 `${{ github.ref }}`
+   - 无变更时跳过提交
+8. **Send email notification**: `python script/notify.py --once`
+9. **Save and commit notify hashes**: 保存并推送 `.notify_hashes.json`
+
+**已解决的技术问题**：
+
+| 问题 | 解决方案 | 提交 |
+|------|---------|------|
+| 路径错误 | 改为 `file/` 目录 | a8c357f |
+| .gitignore 阻止 | `git add -f` 强制添加 + 例外规则 | 82562be, 2520fd1 |
+| Node.js 弃用警告 | 移除 Node.js 设置 + 环境变量 | e61f718, aac2981 |
+| Git 操作健壮性 | 智能检查 + 动态分支 | e61f718 |
+| **403 权限错误** | **`permissions: contents: write`** | **3b793ad** |
+| **运行速度慢** | **IPTV_TIMEOUT=3 + MAX_PARALLEL=200** | **62eca5b** |
+| **邮件通知缺失** | **添加 notify 步骤 + 哈希持久化** | **70a7796, ed522a5** |
+
+**性能优化对比**：
+```
+优化前：3-5 分钟 (180-300s)
+优化后：47-90 秒
+提速比：5-6 倍
+原因：IPTV_TIMEOUT 从 10s→3s，并发从 50→200
+```
+
+**邮件通知逻辑**：
+```python
+# 首次运行（无哈希记录）→ 发送 "new" 邮件 ✓
+# 文件变化（哈希不同）→ 发送 "updated" 邮件 ✓
+# 文件未变（哈希相同）→ 跳过发送（避免轰炸）✓
+# 哈希持久化 → config/.notify_hashes.json 提交到 Git ✓
+```
+
+**触发方式**：
+- 定时任务：`cron: '0 */4 * * *'`（每天 6 次）
+- 手动触发：GitHub Actions 页面 "Run workflow" 按钮
 
 ### Shell脚本
 
@@ -184,6 +251,7 @@ cmd = [
 - bat：`%PYTHON_CMD% "%~dp0notify.py" --once`
 - sh：`$PYTHON_CMD "$WORK_DIR/script/notify.py" --once`
 - 工作目录：bat用 `cd /d "%~dp0.."`，sh用 `cd "$WORK_DIR"`
+- 性能参数：`IPTV_TIMEOUT=3`, `IPTV_MAX_PARALLEL=200`（与 GitHub Actions 一致）
 
 #### FFmpeg 自动修复 (iptv_tool.sh)
 
@@ -227,3 +295,6 @@ cmd = [
 - Web静态文件：`output/` 目录
 - FFmpeg二进制：`ffmpeg/{windows,linux,macos}/bin/`
 - 缓存文件：`file/.cdn_cache.json`、`file/.stream_cache.json`、`file/.source_cache.json`
+- 邮件哈希记录：`config/.notify_hashes.json`（Git 跟踪，用于持久化）
+- GitHub Actions 配置：`.github/workflows/iptv.yml`
+- 邮件配置：`config/notify.json`（含 SMTP 凭证，不提交到 Git）
