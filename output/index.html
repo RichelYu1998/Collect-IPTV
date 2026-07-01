@@ -566,19 +566,29 @@
             if (isHlsUrl && Hls.isSupported()) {
                 currentPlayer = new Hls({
                     enableWorker: true,
-                    lowLatencyMode: true,
-                    backBufferLength: 30,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
-                    maxBufferSize: 60 * 1000 * 1000,
+                    lowLatencyMode: false,
+                    backBufferLength: 10,
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 30,
+                    maxBufferSize: 30 * 1000 * 1000,
                     maxBufferHole: 0.5,
                     liveSyncDurationCount: 3,
                     liveMaxLatencyDurationCount: 6,
                     liveDurationInfinity: true,
                     progressive: true,
                     highBufferWatchdogPeriod: 2,
-                    abrEwmaDefaultEstimate: 500000,
+                    abrEwmaDefaultEstimate: 800000,
+                    abrEwmaFastEstimate: 1500000,
+                    abrBandWidthFactor: 0.7,
+                    abrBandWidthUpFactor: 1.5,
                     startLevel: -1,
+                    fragLoadingTimeOut: 10000,
+                    fragLoadingMaxRetry: 3,
+                    fragLoadingMaxRetryTimeout: 4000,
+                    manifestLoadingTimeOut: 10000,
+                    manifestLoadingMaxRetry: 3,
+                    levelLoadingTimeOut: 10000,
+                    levelLoadingMaxRetry: 3,
                 });
                 currentPlayer.loadSource(proxiedUrl);
                 currentPlayer.attachMedia(video);
@@ -898,15 +908,19 @@
             if (Hls.isSupported()) {
                 currentPlayer = new Hls({
                     enableWorker: true,
-                    lowLatencyMode: true,
-                    backBufferLength: 30,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
-                    maxBufferSize: 60 * 1000 * 1000,
+                    lowLatencyMode: false,
+                    backBufferLength: 10,
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 30,
+                    maxBufferSize: 30 * 1000 * 1000,
                     liveSyncDurationCount: 2,
                     liveMaxLatencyDurationCount: 4,
                     liveDurationInfinity: true,
                     progressive: true,
+                    fragLoadingTimeOut: 10000,
+                    fragLoadingMaxRetry: 3,
+                    manifestLoadingTimeOut: 10000,
+                    manifestLoadingMaxRetry: 3,
                 });
                 currentPlayer.loadSource(transcodeUrl);
                 currentPlayer.attachMedia(video);

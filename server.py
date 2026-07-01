@@ -47,7 +47,7 @@ PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '600'))
 PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '20'))
 PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '3'))
 PRELOAD_SYNC_ALL = os.environ.get('IPTV_PRELOAD_SYNC_ALL', '').lower() in ('1', 'true', 'yes')
-PRELOAD_WAIT_MS = int(os.environ.get('IPTV_PRELOAD_WAIT_MS', '500'))
+PRELOAD_WAIT_MS = int(os.environ.get('IPTV_PRELOAD_WAIT_MS', '200'))
 preload_cache = {}
 preload_order = []
 preload_size = 0
@@ -1236,10 +1236,9 @@ def start_transcode_session(url):
         cmd = [
             FFMPEG_PATH,
             '-nostdin',
-            '-re',
-            '-fflags', '+genpts+discardcorrupt',
-            '-analyzeduration', '5000000',
-            '-probesize', '5000000',
+            '-fflags', '+genpts+discardcorrupt+fastseek',
+            '-analyzeduration', '3000000',
+            '-probesize', '3000000',
             '-i', url,
             '-c:v', 'copy',
             '-c:a', 'aac', '-b:a', TRANSCODE_AUDIO_BITRATE, '-ac', TRANSCODE_AUDIO_CHANNELS,
@@ -1559,27 +1558,44 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(data)
                 else:
-                    data = resp.read(MAX_CONTENT_LENGTH)
-                    with preload_lock:
-                        _preload_evict()
-                        preload_cache[target_url] = {'data': data, 'ct': content_type, 'ts': time.time()}
-                        preload_order.append(target_url)
-                        preload_size += len(data)
+                    content_length = resp.headers.get('Content-Length')
+                    if content_length:
+                        content_length = int(content_length)
+
                     self.send_response(200)
                     self.send_header('Content-Type', content_type)
-                    self.send_header('Content-Length', str(len(data)))
+                    if content_length:
+                        self.send_header('Content-Length', str(content_length))
                     self.send_header('Access-Control-Allow-Origin', '*')
                     self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
                     self.send_header('Access-Control-Allow-Headers', '*')
                     self.send_header('X-Preload-Hit', '0')
                     self.send_header('Cache-Control', 'no-cache')
                     self.end_headers()
-                    off = 0
-                    while off < len(data):
-                        chunk = data[off:off + 65536]
+
+                    total_read = 0
+                    cache_chunks = []
+                    is_ts = '.ts' in target_url or 'video/mp2t' in content_type
+
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        total_read += len(chunk)
+                        if total_read > MAX_CONTENT_LENGTH:
+                            break
                         self.wfile.write(chunk)
                         self.wfile.flush()
-                        off += len(chunk)
+                        if is_ts and len(cache_chunks) < 100:
+                            cache_chunks.append(chunk)
+
+                    if is_ts and cache_chunks:
+                        cached_data = b''.join(cache_chunks)
+                        with preload_lock:
+                            _preload_evict()
+                            preload_cache[target_url] = {'data': cached_data, 'ct': content_type, 'ts': time.time()}
+                            preload_order.append(target_url)
+                            preload_size += len(cached_data)
 
         except urllib.error.HTTPError as e:
             self._send_proxy_error(e.code, e.reason)
