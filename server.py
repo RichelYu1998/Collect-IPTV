@@ -41,18 +41,20 @@ transcode_lock = threading.Lock()
 audio_probe_cache = {}
 audio_probe_lock = threading.Lock()
 
-PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '500'))
-PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(500 * 1024 * 1024)))
-PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '300'))
-PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '10'))
-PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '5'))
+PRELOAD_MAX_ENTRIES = int(os.environ.get('IPTV_PRELOAD_MAX_ENTRIES', '2000'))
+PRELOAD_MAX_SIZE = int(os.environ.get('IPTV_PRELOAD_MAX_SIZE', str(1024 * 1024 * 1024)))
+PRELOAD_TTL = int(os.environ.get('IPTV_PRELOAD_TTL', '600'))
+PRELOAD_WORKERS = int(os.environ.get('IPTV_PRELOAD_WORKERS', '20'))
+PRELOAD_SYNC_FIRST = int(os.environ.get('IPTV_PRELOAD_SYNC_FIRST', '3'))
 PRELOAD_SYNC_ALL = os.environ.get('IPTV_PRELOAD_SYNC_ALL', '').lower() in ('1', 'true', 'yes')
+PRELOAD_WAIT_MS = int(os.environ.get('IPTV_PRELOAD_WAIT_MS', '500'))
 preload_cache = {}
 preload_order = []
 preload_size = 0
 preload_lock = threading.Lock()
 preload_executor = None
 preload_pipelines = {}
+preload_pending = {}
 
 PROJECT_ROOT = Path(__file__).parent
 
@@ -912,6 +914,8 @@ def _preload_evict():
 
 
 def _preload_fetch(url):
+    with preload_lock:
+        preload_pending[url] = True
     try:
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -927,6 +931,9 @@ def _preload_fetch(url):
             preload_size += len(data)
     except Exception:
         pass
+    finally:
+        with preload_lock:
+            preload_pending.pop(url, None)
 
 
 def preload_segments(urls):
@@ -937,7 +944,7 @@ def preload_segments(urls):
     pending = []
     for url in urls:
         with preload_lock:
-            if url in preload_cache:
+            if url in preload_cache or url in preload_pending:
                 continue
         pending.append(url)
     if not pending:
@@ -953,7 +960,7 @@ def preload_segments(urls):
             pass
 
 
-PRELOAD_PIPELINE_INTERVAL = int(os.environ.get('IPTV_PRELOAD_PIPELINE_INTERVAL', '2'))
+PRELOAD_PIPELINE_INTERVAL = int(os.environ.get('IPTV_PRELOAD_PIPELINE_INTERVAL', '1'))
 PRELOAD_PIPELINE_MAX_AGE = int(os.environ.get('IPTV_PRELOAD_PIPELINE_MAX_AGE', '300'))
 
 
@@ -990,6 +997,46 @@ def start_preload_pipeline(m3u8_url):
         preload_pipelines[m3u8_url] = True
     t = threading.Thread(target=_preload_pipeline, args=(m3u8_url,), daemon=True, name=f'pipeline-{hashlib.md5(m3u8_url.encode()).hexdigest()[:8]}')
     t.start()
+
+
+def preload_tstream_segments(session_id, seg_dir, seg_files):
+    global preload_executor
+    if preload_executor is None:
+        preload_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=PRELOAD_WORKERS, thread_name_prefix='preload')
+    for seg_file in seg_files:
+        cache_key = f'tstream://{session_id}/{seg_file}'
+        with preload_lock:
+            if cache_key in preload_cache or cache_key in preload_pending:
+                continue
+        preload_executor.submit(_preload_tstream_fetch, session_id, seg_dir, seg_file, cache_key)
+
+
+def _preload_tstream_fetch(session_id, seg_dir, seg_file, cache_key):
+    with preload_lock:
+        preload_pending[cache_key] = True
+    try:
+        filepath = os.path.join(seg_dir, seg_file)
+        wait_until = time.time() + 15.0
+        while time.time() < wait_until:
+            if os.path.isfile(filepath):
+                try:
+                    with open(filepath, 'rb') as f:
+                        data = f.read()
+                    with preload_lock:
+                        _preload_evict()
+                        preload_cache[cache_key] = {'data': data, 'ct': 'video/mp2t', 'ts': time.time()}
+                        preload_order.append(cache_key)
+                        preload_size += len(data)
+                except Exception:
+                    pass
+                return
+            time.sleep(0.1)
+    except Exception:
+        pass
+    finally:
+        with preload_lock:
+            preload_pending.pop(cache_key, None)
 
 
 def needs_transcode(url):
@@ -1237,6 +1284,34 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         with preload_lock:
             cached = preload_cache.get(target_url)
+            is_pending = target_url in preload_pending
+        if cached and time.time() - cached['ts'] <= PRELOAD_TTL:
+            self.send_response(200)
+            self.send_header('Content-Type', cached['ct'])
+            self.send_header('Content-Length', str(len(cached['data'])))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', '*')
+            self.send_header('X-Preload-Hit', '1')
+            self.end_headers()
+            data = cached['data']
+            off = 0
+            while off < len(data):
+                chunk = data[off:off + 65536]
+                self.wfile.write(chunk)
+                self.wfile.flush()
+                off += len(chunk)
+            return
+        if is_pending and PRELOAD_WAIT_MS > 0:
+            wait_step = 0.05
+            waited = 0.0
+            while waited < PRELOAD_WAIT_MS / 1000.0:
+                time.sleep(wait_step)
+                waited += wait_step
+                with preload_lock:
+                    cached = preload_cache.get(target_url)
+                    if target_url not in preload_pending:
+                        break
             if cached and time.time() - cached['ts'] <= PRELOAD_TTL:
                 self.send_response(200)
                 self.send_header('Content-Type', cached['ct'])
@@ -1315,20 +1390,27 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(data)
                 else:
+                    data = resp.read(MAX_CONTENT_LENGTH)
+                    with preload_lock:
+                        _preload_evict()
+                        preload_cache[target_url] = {'data': data, 'ct': content_type, 'ts': time.time()}
+                        preload_order.append(target_url)
+                        preload_size += len(data)
                     self.send_response(200)
                     self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Length', str(len(data)))
                     self.send_header('Access-Control-Allow-Origin', '*')
                     self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
                     self.send_header('Access-Control-Allow-Headers', '*')
+                    self.send_header('X-Preload-Hit', '0')
                     self.send_header('Cache-Control', 'no-cache')
-                    content_length = resp.headers.get('Content-Length')
-                    if content_length:
-                        self.send_header('Content-Length', content_length)
-                    else:
-                        self.send_header('Transfer-Encoding', 'chunked')
                     self.end_headers()
-
-                    self._stream_proxy_body(resp, content_length)
+                    off = 0
+                    while off < len(data):
+                        chunk = data[off:off + 65536]
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                        off += len(chunk)
 
         except urllib.error.HTTPError as e:
             self._send_proxy_error(e.code, e.reason)
@@ -1411,9 +1493,67 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
         session['last_access'] = time.time()
         filepath = os.path.join(session['dir'], filename)
 
+        if filename.endswith('.ts'):
+            cache_key = f'tstream://{session_id}/{filename}'
+            with preload_lock:
+                cached = preload_cache.get(cache_key)
+                is_pending = cache_key in preload_pending
+            if cached and time.time() - cached['ts'] <= PRELOAD_TTL:
+                self.send_response(200)
+                self.send_header('Content-Type', 'video/mp2t')
+                self.send_header('Content-Length', str(len(cached['data'])))
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('X-Preload-Hit', '1')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                data = cached['data']
+                off = 0
+                while off < len(data):
+                    chunk = data[off:off + 65536]
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                    off += len(chunk)
+                return
+            if is_pending and PRELOAD_WAIT_MS > 0:
+                wait_step = 0.05
+                waited = 0.0
+                while waited < PRELOAD_WAIT_MS / 1000.0:
+                    time.sleep(wait_step)
+                    waited += wait_step
+                    with preload_lock:
+                        cached = preload_cache.get(cache_key)
+                        if cache_key not in preload_pending:
+                            break
+                if cached and time.time() - cached['ts'] <= PRELOAD_TTL:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'video/mp2t')
+                    self.send_header('Content-Length', str(len(cached['data'])))
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('X-Preload-Hit', '1')
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.end_headers()
+                    data = cached['data']
+                    off = 0
+                    while off < len(data):
+                        chunk = data[off:off + 65536]
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                        off += len(chunk)
+                    return
+
         if not os.path.isfile(filepath):
-            self._send_proxy_error(404, 'File not found yet')
-            return
+            if filename.endswith('.ts'):
+                wait_until = time.time() + 8.0
+                while time.time() < wait_until:
+                    time.sleep(0.1)
+                    if os.path.isfile(filepath):
+                        break
+                else:
+                    self._send_proxy_error(404, 'TS segment not ready')
+                    return
+            else:
+                self._send_proxy_error(404, 'File not found yet')
+                return
 
         try:
             with open(filepath, 'rb') as f:
@@ -1422,9 +1562,18 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_proxy_error(500, 'Read error')
             return
 
+        if filename.endswith('.ts'):
+            cache_key = f'tstream://{session_id}/{filename}'
+            with preload_lock:
+                _preload_evict()
+                preload_cache[cache_key] = {'data': data, 'ct': 'video/mp2t', 'ts': time.time()}
+                preload_order.append(cache_key)
+                preload_size += len(data)
+
         if filename.endswith('.m3u8'):
             try:
                 text = data.decode('utf-8')
+                seg_files = []
                 rewritten = []
                 for line in text.split('\n'):
                     stripped = line.strip()
@@ -1432,9 +1581,13 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
                         rewritten.append(stripped)
                     elif stripped.endswith('.ts') or stripped.endswith('.m3u8'):
                         rewritten.append(f'{TSTREAM_PREFIX}{session_id}/{stripped}')
+                        if stripped.endswith('.ts'):
+                            seg_files.append(stripped)
                     else:
                         rewritten.append(stripped)
                 data = '\n'.join(rewritten).encode('utf-8')
+                if seg_files:
+                    preload_tstream_segments(session_id, session['dir'], seg_files)
             except Exception:
                 pass
             content_type = 'application/vnd.apple.mpegurl'
@@ -1529,4 +1682,5 @@ if __name__ == '__main__':
         sys.exit(0 if success else 1)
     else:
         main()
+
 
