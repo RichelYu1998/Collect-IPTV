@@ -286,3 +286,63 @@ on:
 | Shell 输出 | 全中文，统一前缀格式 |
 | 版本号 | 唯一来源 `README.md`，格式 `### v1.2.3 (2026-06-30)` |
 | 依赖管理 | `pip install aiohttp`（最小依赖），虚拟环境 `.venv` |
+## FFmpeg 多平台支持
+
+### 预编译二进制文件位置
+
+项目根目录 fmpeg/ 文件夹包含所有平台的预编译版本：
+
+`
+ffmpeg/
+├── windows/bin/     # Windows (ffmpeg.exe, ffprobe.exe, ffplay.exe)
+├── linux/bin/       # Linux (ffmpeg, ffprobe)
+└── macos/bin/       # macOS (ffmpeg, ffprobe) - evermeet.cx
+`
+
+### 自动检测逻辑
+
+程序运行时会自动检测操作系统并选择对应的 FFmpeg 路径：
+
+**支持的系统标识符:**
+- windows: Windows 10/11 (x64/ARM64)
+- linux: Ubuntu/Debian/CentOS (x64/ARM64)
+- macos / darwin: macOS (Intel/Apple Silicon)
+
+**二进制文件路径映射:**
+`python
+FFMPEG_PATHS = {
+    'windows': 'ffmpeg/windows/bin/{binary}.exe',
+    'linux': 'ffmpeg/linux/bin/{binary}',
+    'macos': 'ffmpeg/macos/bin/{binary}',
+}
+`
+
+### 安装源
+
+| 平台 | 主要来源 | 备用来源 |
+|------|---------|---------|
+| **Windows** | BtbN GitHub | Gyan.dev, npm 淘宝镜像 |
+| **Linux** | BtbN GitHub | 系统包管理器 (apt/yum) |
+| **macOS** | evermeet.cx | Homebrew, npm 淘宝镜像 |
+
+### 使用说明
+
+1. **自动模式**: 运行 python server.py 或启动脚本，程序会自动检测并使用对应平台
+2. **手动指定**: 可通过环境变量或配置文件强制指定 FFmpeg 路径
+3. **权限设置**: Linux/macOS 二进制文件已设置为可执行权限 (755)
+
+### 维护命令
+
+如需更新 FFmpeg 到最新版本，可运行：
+`ash
+# 使用内置下载脚本
+python download_all_ffmpeg.py
+
+# 或手动替换对应平台的二进制文件
+cp ffmpeg-new ffmpeg/<platform>/bin/ffmpeg
+`
+
+---
+
+**最后更新**: 2026-07-01  
+**维护者**: Auto-generated  

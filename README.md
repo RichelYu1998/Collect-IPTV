@@ -1463,3 +1463,75 @@ python .github/workflows/iptv.py --setup-ffmpeg
 ## 📺️电视台清单表
 
 详见 [.github/workflows/IPTV/](.github/workflows/IPTV/) 目录下的各省市频道配置文件。
+## 🎬 FFmpeg 跨平台预编译版本 (2026-07-01 更新)
+
+本项目现已内置 **Windows / Linux / macOS** 三大平台的 FFmpeg 预编译二进制文件，用户无需手动下载安装！
+
+### 📁 目录结构
+
+`
+ffmpeg/
+├── windows/                    # Windows x64 版本
+│   └── bin/
+│       ├── ffmpeg.exe          (136 MB)
+│       ├── ffplay.exe          (233 MB)
+│       └── ffprobe.exe         (136 MB)
+│
+├── linux/                      # Linux x64 版本
+│   └── bin/
+│       ├── ffmpeg              (137 MB)
+│       └── ffprobe             (137 MB)
+│
+├── macos/                      # macOS Universal 版本
+│   └── bin/
+│       ├── ffmpeg              (76 MB)  ← evermeet.cx
+│       └── ffprobe             (76 MB)  ← evermeet.cx
+│
+├── doc/                        # 官方文档
+├── presets/                    # 编码预设
+├── LICENSE                     # 许可证
+└── README.txt                  # 说明文件
+`
+
+### ✨ 特性
+
+| 平台 | 架构 | 来源 | 大小 | 状态 |
+|------|------|------|------|------|
+| **Windows** | x64 | BtbN GitHub Builds | ~506 MB | ✅ |
+| **Linux** | x64 | BtbN GitHub Builds | ~275 MB | ✅ |
+| **macOS** | Universal Binary | evermeet.cx | ~153 MB | ✅ |
+
+### 🔧 使用方式
+
+程序会自动检测操作系统，选择对应平台的 FFmpeg 二进制文件：
+
+`python
+# server.py 中的自动检测逻辑
+if system == 'windows':
+    ffmpeg_path = 'ffmpeg/windows/bin/ffmpeg.exe'
+elif system == 'linux':
+    ffmpeg_path = 'ffmpeg/linux/bin/ffmpeg'
+elif system == 'darwin':  # macOS
+    ffmpeg_path = 'ffmpeg/macos/bin/ffmpeg'
+`
+
+### 📥 下载来源
+
+- **Windows & Linux**: [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) - 最新 master 构建
+- **macOS**: [evermeet.cx](https://evermeet.cx/ffmpeg/) - macOS 优化版本，支持 Apple Silicon (M1/M2/M3) 和 Intel
+
+### 🚀 优势
+
+✅ **开箱即用** - 无需用户手动安装 FFmpeg  
+✅ **跨平台统一** - 一套代码支持三大操作系统  
+✅ **自动检测** - 智能识别系统架构  
+✅ **离线可用** - 预编译版本已包含在项目中  
+✅ **持续更新** - 可通过脚本重新下载最新版本  
+
+### 📝 更新日志
+
+**2026-07-01**: 
+- 初始添加 Windows/Linux/macOS 三平台 FFmpeg
+- 使用项目根目录 fmpeg/ 文件夹统一管理（不再放入 .venv）
+- 按操作系统分子目录存放：windows/, linux/, macos/
+- macOS 使用 evermeet.cx 提供的 Universal Binary
