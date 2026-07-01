@@ -5,10 +5,13 @@ import json
 import hashlib
 import smtplib
 import time
+import base64
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
 from email.header import Header
+from email import encoders
 from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -84,14 +87,16 @@ def detect_changes(config):
             changes.append({
                 'file': fname,
                 'type': 'new',
-                'detail': '首次检测到文件'
+                'detail': '首次检测到文件',
+                'filepath': str(fpath)
             })
         elif old != current:
             size = os.path.getsize(str(fpath))
             changes.append({
                 'file': fname,
                 'type': 'updated',
-                'detail': f'文件已变更 (大小: {size} 字节)'
+                'detail': f'文件已变更 (大小: {size} 字节)',
+                'filepath': str(fpath)
             })
 
     save_hashes(new_hashes)
@@ -113,7 +118,7 @@ def send_email(config, changes):
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     change_count = len(changes)
 
-    msg = MIMEMultipart('alternative')
+    msg = MIMEMultipart('mixed')
     msg['From'] = f"{Header(from_name, 'utf-8').encode()} <{smtp_user}>"
     msg['To'] = to_email
     msg['Subject'] = Header(
@@ -121,15 +126,51 @@ def send_email(config, changes):
         'utf-8'
     )
 
+    # 邮件正文
     body_lines = [f'IPTV直播源文件变更通知', '', f'时间: {current_time}', '']
     for c in changes:
         tag = '新增' if c['type'] == 'new' else '变更'
         body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
+    
+    attachment_files = []
+    for c in changes:
+        filepath = c.get('filepath', '')
+        if filepath and os.path.exists(filepath):
+            attachment_files.append(filepath)
+    
     body_lines.append('')
-    body_lines.append('请及时查看更新后的直播源文件。')
+    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    for fpath in attachment_files:
+        fname = os.path.basename(fpath)
+        body_lines.append(f'  - {fname}')
+    
+    body_lines.append('')
+    body_lines.append('请查收附件中的最新直播源文件。')
     body = '\n'.join(body_lines)
 
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+    # 添加附件
+    for filepath in attachment_files:
+        try:
+            filename = os.path.basename(filepath)
+            
+            with open(filepath, 'rb') as f:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+                
+            encoders.encode_base64(part)
+            
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename="{filename}"'
+            )
+            
+            msg.attach(part)
+            print(f'[通知] 已添加附件: {filename}')
+            
+        except Exception as e:
+            print(f'[通知] 添加附件失败 {filepath}: {e}')
 
     try:
         print('[通知] 正在发送邮件...')
@@ -156,7 +197,7 @@ def send_email(config, changes):
 
 
 def check_and_notify(config):
-    """检测变更并发送邮件"""
+    """检测变更并发送邮件（含附件）"""
     changes = detect_changes(config)
     
     if not changes:
@@ -211,25 +252,23 @@ def main():
         print('[通知] 邮件通知未启用，跳过')
         return
     
-    # 监控间隔（秒），默认60秒检查一次
     interval = int(config.get('watch_interval_seconds', 60))
     
     print('=' * 60)
-    print('IPTV 直播源文件监控服务')
+    print('IPTV 直播源文件监控服务 (带附件)')
     print('=' * 60)
     print(f'[通知] 监控文件: {config.get("watch_files", [])}')
     print(f'[通知] 检查间隔: {interval} 秒')
     print(f'[通知] 邮件冷却: {config.get("email_cooldown_seconds", 300)} 秒')
     print(f'[通知] 接收邮箱: {config.get("email_to", "未设置")}')
+    print(f'[通知] 附件模式: 开启 (变更文件将作为附件发送)')
     print('=' * 60)
     print('[通知] 开始监控... (按 Ctrl+C 停止)')
     print('')
     
-    # 首次运行时立即检测一次
     print('[通知] 执行首次检测...')
     check_and_notify(config)
     
-    # 持续监控循环
     try:
         while True:
             time.sleep(interval)
