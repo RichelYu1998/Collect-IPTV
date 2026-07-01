@@ -69,8 +69,32 @@ jobs:
       run: |
         echo "=== 发送邮件通知 ==="
         python script/notify.py --once
-        if [ $? -eq 0 ]; then
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 0 ]; then
           echo "✅ 邮件通知发送成功"
+          echo "EMAIL_SENT=true" >> $GITHUB_ENV
         else
           echo "⚠️ 邮件通知跳过（无变更或首次运行已标记）"
+          echo "EMAIL_SENT=false" >> $GITHUB_ENV
+        fi
+    - name: Save and commit notify hashes
+      run: |
+        echo "=== 保存邮件通知哈希记录 ==="
+        
+        if [ -f "config/.notify_hashes.json" ]; then
+          echo "=== 发现哈希记录文件，准备提交 ==="
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          git add -f config/.notify_hashes.json
+          
+          if git diff --cached --quiet; then
+            echo "哈希记录无变化，跳过提交"
+          else
+            git commit -m "更新邮件通知哈希记录：${GET_TIME}"
+            git push origin HEAD:${{ github.ref }}
+            echo "✅ 哈希记录已保存到仓库"
+          fi
+        else
+          echo "⚠️ 未生成哈希记录文件（可能监控文件不存在或通知未启用）"
         fi
