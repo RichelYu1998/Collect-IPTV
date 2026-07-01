@@ -567,8 +567,8 @@
                     url: proxiedUrl,
                 }, {
                     enableWorker: true,
-                    enableStashBuffer: false,
-                    stashInitialSize: 128,
+                    enableStashBuffer: true,
+                    stashInitialSize: 1024,
                     lazyLoad: false,
                     lazyLoadMaxDuration: 180,
                     lazyLoadRecoverDuration: 30,
@@ -578,19 +578,41 @@
                     autoCleanupMinBackwardDuration: 10,
                     liveBufferLatencyChasing: true,
                     liveBufferLatencyChasingOnPaused: true,
-                    liveBufferLatencyMaxLatency: 6,
-                    liveBufferLatencyMinRemain: 0.5,
+                    liveBufferLatencyMaxLatency: 10,
+                    liveBufferLatencyMinRemain: 2,
                     liveSync: true,
-                    liveSyncMaxLatency: 6,
+                    liveSyncMaxLatency: 10,
                 });
                 currentPlayer.attachMediaElement(video);
                 currentPlayer.load();
-                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => {
+
+                let playbackStarted = false;
+
+                function onPlaybackReady(info) {
+                    if (playbackStarted) return;
+                    playbackStarted = true;
                     if (loading) loading.classList.add('hidden');
                     retryCount = 0;
                     tryPlayWithSound(video);
-                    checkAudioTracksFromPlayer(info);
+                    if (info) checkAudioTracksFromPlayer(info);
+                }
+
+                currentPlayer.on(mpegts.Events.MEDIA_INFO, (type, info) => {
+                    console.log('[Player] MEDIA_INFO:', info);
+                    onPlaybackReady(info);
                 });
+                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => {
+                    console.log('[Player] METADATA_ARRIVED:', info);
+                    onPlaybackReady(info);
+                });
+                video.addEventListener('loadeddata', () => {
+                    console.log('[Player] video loadeddata');
+                    onPlaybackReady(null);
+                }, { once: true });
+                video.addEventListener('canplay', () => {
+                    console.log('[Player] video canplay');
+                    onPlaybackReady(null);
+                }, { once: true });
                 currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
                     if (loading) loading.classList.add('hidden');
                     const errType = detail && detail.type ? detail.type : type;
@@ -875,26 +897,44 @@
                     url: transcodeUrl,
                 }, {
                     enableWorker: true,
-                    enableStashBuffer: false,
-                    stashInitialSize: 128,
+                    enableStashBuffer: true,
+                    stashInitialSize: 1024,
                     lazyLoad: false,
                     autoCleanupSourceBuffer: true,
                     autoCleanupMaxBackwardDuration: 30,
                     autoCleanupMinBackwardDuration: 10,
                     liveBufferLatencyChasing: true,
-                    liveBufferLatencyMaxLatency: 6,
-                    liveBufferLatencyMinRemain: 0.5,
+                    liveBufferLatencyMaxLatency: 10,
+                    liveBufferLatencyMinRemain: 2,
                     liveSync: true,
-                    liveSyncMaxLatency: 6,
+                    liveSyncMaxLatency: 10,
                 });
                 currentPlayer.attachMediaElement(video);
                 currentPlayer.load();
-                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, () => {
-                    console.log('[Transcode] Transcoded stream manifest loaded successfully');
+
+                let transcodePlaybackStarted = false;
+
+                function onTranscodeReady() {
+                    if (transcodePlaybackStarted) return;
+                    transcodePlaybackStarted = true;
+                    console.log('[Transcode] Stream ready, starting playback');
                     hideTranscodeIndicator();
                     if (loading) loading.classList.add('hidden');
                     tryPlayWithSound(video);
+                }
+
+                currentPlayer.on(mpegts.Events.MEDIA_INFO, () => {
+                    onTranscodeReady();
                 });
+                currentPlayer.on(mpegts.Events.METADATA_ARRIVED, () => {
+                    onTranscodeReady();
+                });
+                video.addEventListener('loadeddata', () => {
+                    onTranscodeReady();
+                }, { once: true });
+                video.addEventListener('canplay', () => {
+                    onTranscodeReady();
+                }, { once: true });
                 currentPlayer.on(mpegts.Events.ERROR, (type, detail) => {
                     const errType = detail && detail.type ? detail.type : type;
                     console.warn('[Transcode] Error:', errType, detail);
