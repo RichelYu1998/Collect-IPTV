@@ -796,11 +796,11 @@ def probe_audio_info(url):
             '-print_format', 'json',
             '-show_streams',
             '-select_streams', 'a',
-            '-analyzeduration', '500000',
-            '-probesize', '500000',
+            '-analyzeduration', '256000',
+            '-probesize', '256000',
             '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            '-timeout', '3000000',
-            '-rw_timeout', '3000000',
+            '-timeout', '2000000',
+            '-rw_timeout', '2000000',
             '-fflags', '+genpts+discardcorrupt+fastseek',
             '-max_delay', '0',
             '-threads', '1',
@@ -811,7 +811,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 5,
+                'timeout': 3,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -840,8 +840,8 @@ def probe_audio_info(url):
             FFMPEG_PATH,
             '-nostdin',
             '-fflags', '+genpts+discardcorrupt+fastseek',
-            '-analyzeduration', '500000',
-            '-probesize', '500000',
+            '-analyzeduration', '256000',
+            '-probesize', '256000',
             '-i', url,
             '-hide_banner',
             '-t', '0',
@@ -854,7 +854,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 5,
+                'timeout': 3,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -895,7 +895,7 @@ def _probe_audio_fast(url):
 
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        with urllib.request.urlopen(req, timeout=4) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:
             data = resp.read(4096)
         text = data.decode('utf-8', errors='replace')
 
@@ -917,8 +917,8 @@ def _probe_audio_fast(url):
 
         seg_req = urllib.request.Request(seg_url)
         seg_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        with urllib.request.urlopen(seg_req, timeout=4) as seg_resp:
-            seg_data = seg_resp.read(65536)
+        with urllib.request.urlopen(seg_req, timeout=3) as seg_resp:
+            seg_data = seg_resp.read(32768)
 
         if len(seg_data) < 188:
             return None
@@ -988,8 +988,8 @@ def _probe_audio_fast(url):
                 FFMPEG_PATH,
                 '-nostdin',
                 '-fflags', '+genpts+discardcorrupt+fastseek',
-                '-analyzeduration', '500000',
-                '-probesize', '500000',
+                '-analyzeduration', '256000',
+                '-probesize', '256000',
                 '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 '-i', url,
                 '-hide_banner',
@@ -1001,15 +1001,15 @@ def _probe_audio_fast(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 6,
+                'timeout': 4,
             }
         else:
             cmd = [
                 FFMPEG_PATH,
                 '-nostdin',
                 '-fflags', '+genpts+discardcorrupt+fastseek',
-                '-analyzeduration', '500000',
-                '-probesize', '500000',
+                '-analyzeduration', '256000',
+                '-probesize', '256000',
                 '-i', url,
                 '-hide_banner',
                 '-t', '0',
@@ -1020,7 +1020,7 @@ def _probe_audio_fast(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 5,
+                'timeout': 3,
             }
         if os.name == 'nt':
             kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
