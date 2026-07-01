@@ -914,7 +914,185 @@ ffmpeg/
 ---
 
 **最后更新**: 2026-07-01
-**版本**: v2.9.0 (播放器升级mpegts.js & FFmpeg优化 & 邮件检测增强)
+**版本**: v2.10.0 (播放器架构重构 & 性能优化 & 音频探测加速)
+
+---
+
+## v2.10.0 变更记录 - 播放器架构重构 & 性能优化 & 音频探测加速
+
+**变更时间**: 2026-07-01
+
+### 一、播放器架构重构：双引擎（hls.js + mpegts.js）
+
+#### 1.1 根本问题
+
+**mpegts.js 不支持 HLS/m3u8** — 它只能处理原始 MPEG-TS 和 FLV 流。
+所有 IPTV 源都是 HLS (m3u8) 格式，必须用 hls.js 播放。
+
+#### 1.2 双引擎架构
+
+```html
+<!-- 同时加载两个播放器库 -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.min.js"></script>
+```
+
+```javascript
+// URL类型自动检测
+const isHlsUrl = proxiedUrl.includes('.m3u8') || proxiedUrl.includes('.m3u')
+    || proxiedUrl.includes('/hls/') || proxiedUrl.includes('/tstream/');
+
+// HLS流 → hls.js
+if (isHlsUrl && Hls.isSupported()) {
+    currentPlayer = new Hls(config);
+    currentPlayer.loadSource(proxiedUrl);
+    currentPlayer.attachMedia(video);
+    currentPlayer.on(Hls.Events.MANIFEST_PARSED, () => { ... });
+    currentPlayer.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+            switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR: currentPlayer.startLoad(); break;
+                case Hls.ErrorTypes.MEDIA_ERROR: currentPlayer.recoverMediaError(); break;
+            }
+        }
+    });
+}
+// 原始TS/FLV流 → mpegts.js
+else if (!isHlsUrl && mpegts.isSupported()) {
+    currentPlayer = mpegts.createPlayer({type:'mpegts', isLive:true, url}, config);
+    currentPlayer.attachMediaElement(video);
+    currentPlayer.load();
+}
+```
+
+#### 1.3 关键差异
+
+| 功能 | hls.js | mpegts.js |
+|------|--------|-----------|
+| 支持格式 | HLS (m3u8) | 原始 MPEG-TS / FLV |
+| 创建 | `new Hls(config)` | `mpegts.createPlayer({type, isLive, url}, config)` |
+| 加载源 | `loadSource(url)` + `attachMedia(video)` | `attachMediaElement(video)` + `load()` |
+| 就绪事件 | `Hls.Events.MANIFEST_PARSED` | `MEDIA_INFO` + `loadeddata` + `canplay` |
+| 网络错误恢复 | `startLoad()` | `unload()` + `load()` + `play()` |
+| 媒体错误恢复 | `recoverMediaError()` | `unload()` + `load()` + `play()` |
+| 销毁 | `destroy()` | `unload()` + `detachMediaElement()` + `destroy()` |
+
+#### 1.4 destroyPlayer 兼容两种播放器
+
+```javascript
+function destroyPlayer() {
+    if (currentPlayer) {
+        try {
+            if (currentPlayer instanceof Hls) {
+                currentPlayer.destroy();
+            } else {
+                if (currentPlayer.unload) currentPlayer.unload();
+                if (currentPlayer.detachMediaElement) currentPlayer.detachMediaElement();
+                if (currentPlayer.destroy) currentPlayer.destroy();
+            }
+        } catch (e) { console.warn('[Player] Destroy error:', e); }
+        currentPlayer = null;
+    }
+}
+```
+
+#### 1.5 mpegts.js 就绪事件修复
+
+**问题**: `METADATA_ARRIVED` 在 HLS 流中可能不触发（仅用于 ID3 元数据）。
+**修复**: 多事件监听 + 防重复触发标志。
+
+```javascript
+let playbackStarted = false;
+function onPlaybackReady(info) {
+    if (playbackStarted) return;
+    playbackStarted = true;
+    // ... 启动播放
+}
+currentPlayer.on(mpegts.Events.MEDIA_INFO, (type, info) => onPlaybackReady(info));
+currentPlayer.on(mpegts.Events.METADATA_ARRIVED, (type, info) => onPlaybackReady(info));
+video.addEventListener('loadeddata', () => onPlaybackReady(null), { once: true });
+video.addEventListener('canplay', () => onPlaybackReady(null), { once: true });
+```
+
+### 二、hls.js 播放优化配置
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `lowLatencyMode` | false | 非LL-HLS流开启反而增加卡顿 |
+| `backBufferLength` | 10 | 回看缓冲10秒（减少内存压力） |
+| `maxBufferLength` | 10 | 前向缓冲10秒（直播流不需要大缓冲） |
+| `maxMaxBufferLength` | 30 | 最大缓冲上限30秒 |
+| `maxBufferSize` | 30MB | 缓冲区大小上限 |
+| `liveSyncDurationCount` | 3 | 直播同步：从第3个分片开始 |
+| `liveMaxLatencyDurationCount` | 6 | 直播最大延迟6个分片 |
+| `abrEwmaDefaultEstimate` | 800000 | ABR初始带宽估算800kbps |
+| `abrEwmaFastEstimate` | 1500000 | ABR快速带宽估算1.5Mbps |
+| `fragLoadingTimeOut` | 10000 | 分片加载超时10秒 |
+| `fragLoadingMaxRetry` | 3 | 分片加载最大重试3次 |
+
+### 三、后端代理流式转发优化
+
+**问题**: TS分片先全部下载到内存再转发，首字节延迟大。
+**修复**: 边读边转发，同时缓存。
+
+```python
+# 旧：全部读完再转发
+data = resp.read(MAX_CONTENT_LENGTH)
+self.wfile.write(data)
+
+# 新：流式转发 + 边缓存
+while True:
+    chunk = resp.read(65536)
+    if not chunk: break
+    self.wfile.write(chunk)
+    self.wfile.flush()
+    if is_ts and len(cache_chunks) < 100:
+        cache_chunks.append(chunk)
+```
+
+### 四、FFmpeg转码参数优化
+
+| 参数 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| `-re` | 有 | **移除** | 限制输出速率为1x，直播流延迟会累积 |
+| `-analyzeduration` | 5000000 | 3000000 | 更快启动分析 |
+| `-probesize` | 5000000 | 3000000 | 更快启动探测 |
+| `-fflags` | +genpts+discardcorrupt | +genpts+discardcorrupt+fastseek | 快速seek支持 |
+
+### 五、Python原生TS流快速音频探测
+
+#### 5.1 _probe_audio_fast 函数
+
+直接解析TS包结构，无需ffprobe/ffmpeg，非加密流秒级完成：
+
+```
+1. 下载m3u8 → 解析第一个TS分片URL
+2. 下载256KB TS数据
+3. 遍历TS包(188字节): 0x47同步 → PID → PUSI标志
+4. 处理adaptation field + pointer byte
+5. 识别PES stream_id:
+   - 0xC0-0xDF: MPEG音频 → 检测mp2/mp3
+   - 0xBD: 私有流 → 检测ac3/eac3/dts
+6. 加密流检测: pointer byte > 183 → 切换ffmpeg探测
+```
+
+#### 5.2 探测优先级链
+
+```
+_probe_audio_fast() → ffprobe → ffmpeg -i → 返回错误
+```
+
+| 方法 | 非加密流 | 加密流 |
+|------|---------|--------|
+| _probe_audio_fast | ~1-2秒 | 自动跳过 |
+| ffprobe | ~3-5秒 | ~8-10秒 |
+| ffmpeg -i | ~5-8秒 | ~8-12秒 |
+
+### 六、预加载等待时间优化
+
+| 参数 | 旧值 | 新值 | 说明 |
+|------|------|------|------|
+| `PRELOAD_WAIT_MS` | 500 | 200 | 减少首次播放延迟 |
 
 ---
 

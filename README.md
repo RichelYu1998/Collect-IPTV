@@ -340,7 +340,7 @@ best_sorted.m3u/m3u8
 
 #### 播放器功能
 
-- ▶️ MPEG-TS流媒体播放（基于mpegts.js）
+- ▶️ 双引擎流媒体播放（HLS流用hls.js，TS/FLV流用mpegts.js）
 - 🔊 音量控制与静音
 - ⏯️ 播放/暂停切换
 - 📱 全屏模式支持
@@ -386,7 +386,7 @@ best_sorted.m3u/m3u8
 | 层级 | 技术 | 用途 |
 |------|------|------|
 | **前端** | HTML5 + CSS3 + JavaScript | 用户界面 |
-| **播放器** | mpegts.js | 流媒体播放 |
+| **播放器** | hls.js + mpegts.js | HLS流/TS流双引擎播放 |
 | **后端** | Python 3.9+ | 业务逻辑 |
 | **框架** | aiohttp | 异步HTTP服务 |
 | **转码** | FFmpeg | 音视频处理 |
@@ -540,6 +540,59 @@ Made with ❤️ by Collect-IPTV Team
 ---
 
 ## 📜 完整更新历史
+
+### v2.10.0 (2026-07-01) - 播放器架构重构 & 性能优化 & 音频探测加速
+
+#### ✨ 新功能
+- ✅ 双播放器架构：HLS流(m3u8)使用hls.js，原始TS/FLV流使用mpegts.js，自动识别URL类型
+- ✅ Python原生TS流快速音频探测(_probe_audio_fast)：直接解析TS包结构，非加密流秒级完成
+- ✅ 加密流自动检测：pointer byte异常时自动切换ffmpeg探测
+- ✅ 前端probe请求10秒超时控制，防止无限等待
+
+#### 🔧 优化改进 - 播放器架构
+- 🎬 修复mpegts.js不支持HLS(m3u8)的根本问题——mpegts.js只能处理原始MPEG-TS/FLV流
+- 🎬 同时加载hls.js和mpegts.js，根据URL类型自动选择播放器
+- 🎬 HLS流：hls.js + MANIFEST_PARSED事件 + recoverMediaError恢复
+- 🎬 TS/FLV流：mpegts.js + MEDIA_INFO/loadeddata/canplay多事件就绪检测
+- 🎬 转码播放器(输出m3u8)改用hls.js
+- 🎬 destroyPlayer兼容两种播放器销毁方式(Hls.destroy vs mpegts.unload+destroy)
+
+#### 🔧 优化改进 - hls.js播放配置
+- ⚡ lowLatencyMode: false（非LL-HLS流开启反而增加卡顿）
+- ⚡ backBufferLength: 30→10（减少内存压力和GC停顿）
+- ⚡ maxBufferLength: 30→10（直播流不需要大缓冲）
+- ⚡ maxMaxBufferLength: 60→30（防止缓冲无限增长）
+- ⚡ maxBufferSize: 60MB→30MB（减少内存占用）
+- ⚡ ABR带宽估算优化：初始800k，快速1.5M，因子0.7/1.5
+- ⚡ 分片/manifest/level加载超时10秒+3次重试
+
+#### 🔧 优化改进 - 后端代理
+- ⚡ TS分片流式转发：边读64KB边转发，不再全部读完再发（首字节延迟从数秒降到毫秒级）
+- ⚡ 预加载等待时间：500ms→200ms（减少首次播放延迟）
+- ⚡ TS分片缓存改为边转发边缓存，不阻塞转发
+
+#### 🔧 优化改进 - FFmpeg转码
+- ⚡ 移除-re参数（不再限制输出速率，减少延迟累积）
+- ⚡ analyzeduration/probesize: 5M→3M（更快启动）
+- ⚡ 添加+fastseek标志
+
+#### 🔧 优化改进 - 音频探测
+- ⚡ _probe_audio_fast：下载m3u8→解析TS分片URL→下载256KB TS数据→解析TS包结构
+- ⚡ 支持mp2/mp3/ac3/eac3/dts编码识别
+- ⚡ 加密流检测：pointer byte > 183说明加密，自动切换ffmpeg探测
+- ⚡ 加密流ffmpeg探测：增加user_agent、较大probesize(1M)、12秒超时
+- ⚡ 非加密流ffmpeg探测：极小probesize(500KB)、8秒超时
+- ⚡ ffprobe探测：缩小analyzeduration/probesize到2M，超时10秒
+
+#### 🐛 Bug修复
+- ✅ 修复mpegts.js无法播放HLS流（根因：mpegts.js不支持m3u8播放列表解析）
+- ✅ 修复METADATA_ARRIVED事件在HLS流中不触发（改用MEDIA_INFO+loadeddata+canplay多事件）
+- ✅ 修复播放器MEDIA_ERROR无恢复操作（添加unload→load→play恢复链）
+- ✅ 修复缓冲配置过于激进导致网络波动卡死（enableStashBuffer→true, stashInitialSize→1024）
+- ✅ 修复TS PES解析中pointer byte处理（PUSI包payload首字节为pointer field）
+- ✅ 修复转码播放器mpegts.js销毁方式不兼容（改用hls.js）
+
+---
 
 ### v2.9.0 (2026-07-01) - 播放器升级 & FFmpeg优化 & 邮件检测增强
 
