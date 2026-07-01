@@ -248,7 +248,9 @@ def check_and_notify(config):
 
 
 def main():
-    """主函数：持续监控文件变更"""
+    """主函数：检测文件变更并发送邮件"""
+    import sys
+    
     config = load_config()
     if not config:
         return
@@ -257,32 +259,46 @@ def main():
         print('[通知] 邮件通知未启用，跳过')
         return
     
-    interval = int(config.get('watch_interval_seconds', 60))
+    # 检查是否为单次模式（从bat/sh脚本调用）
+    is_single_run = '--once' in sys.argv or len(sys.argv) > 1
     
-    print('=' * 60)
-    print('IPTV 直播源文件监控服务 (带附件)')
-    print('=' * 60)
-    print(f'[通知] 监控文件: {config.get("watch_files", [])}')
-    print(f'[通知] 检查间隔: {interval} 秒')
-    print(f'[通知] 发送策略: 首次运行或文件变化时立即发送')
-    print(f'[通知] 接收邮箱: {config.get("email_to", "未设置")}')
-    print(f'[通知] 附件模式: 开启 (M3U/M3U8文件将作为附件发送)')
-    print('=' * 60)
-    print('[通知] 开始监控... (按 Ctrl+C 停止)')
-    print('')
-    
-    print('[通知] 执行首次检测...')
-    check_and_notify(config)
-    
-    try:
-        while True:
-            time.sleep(interval)
-            check_and_notify(config)
-    except KeyboardInterrupt:
-        print('\n[通知] 监控已停止')
+    if not is_single_run:
+        # 持续监控模式（手动运行）
+        interval = int(config.get('watch_interval_seconds', 60))
+        
+        print('=' * 60)
+        print('IPTV 直播源文件监控服务 (带附件)')
+        print('=' * 60)
+        print(f'[通知] 监控文件: {config.get("watch_files", [])}')
+        print(f'[通知] 检查间隔: {interval} 秒')
+        print(f'[通知] 发送策略: 文件变化时立即发送')
+        print(f'[通知] 接收邮箱: {config.get("email_to", "未设置")}')
+        print(f'[通知] 附件模式: 开启 (M3U/M3U8文件将作为附件发送)')
+        print('=' * 60)
+        print('[通知] 开始监控... (按 Ctrl+C 停止)')
+        print('')
+        
+        print('[通知] 执行首次检测...')
+        check_and_notify(config)
+        
+        try:
+            while True:
+                time.sleep(interval)
+                check_and_notify(config)
+        except KeyboardInterrupt:
+            print('\n[通知] 监控已停止')
+    else:
+        # 单次模式（从bat/sh脚本调用）
+        print('[通知] 检测文件变更并发送邮件通知（单次模式）...')
+        success = check_and_notify(config)
+        if success:
+            print('[通知] ✓ 单次检测完成')
+        else:
+            print('[通知] 单次检测完成（无变更或发送失败）')
 
 
 if __name__ == '__main__':
     main()
+
 
 

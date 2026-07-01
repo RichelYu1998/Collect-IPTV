@@ -32,8 +32,7 @@ TRANSCODE_HLS_TIME = os.environ.get('IPTV_TRANSCODE_HLS_TIME', '4')
 TRANSCODE_HLS_LIST_SIZE = os.environ.get('IPTV_TRANSCODE_HLS_LIST_SIZE', '6')
 TRANSCODE_SESSION_TIMEOUT = int(os.environ.get('IPTV_TRANSCODE_SESSION_TIMEOUT', '600'))
 PROXY_TIMEOUT = int(os.environ.get('IPTV_PROXY_TIMEOUT', '15'))
-LAN_IP_DETECT_HOST = os.environ.get('IPTV_LAN_IP_DETECT_HOST', '8.8.8.8')
-LAN_IP_DETECT_PORT = int(os.environ.get('IPTV_LAN_IP_DETECT_PORT', '80'))
+
 
 FFMPEG_PATH = None
 TRANSCODE_DIR = None
@@ -1494,15 +1493,7 @@ class ThreadedHTTPServer(http.server.ThreadingHTTPServer):
     daemon_threads = True
 
 
-def get_lan_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect((LAN_IP_DETECT_HOST, LAN_IP_DETECT_PORT))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except Exception:
-        return None
+
 
 
 def main():
@@ -1518,9 +1509,6 @@ def main():
 
     with ThreadedHTTPServer(('', port), handler) as httpd:
         print(f'  访问地址: http://127.0.0.1:{port}')
-        lan_ip = get_lan_ip()
-        if lan_ip:
-            print(f'  局域网地址: http://{lan_ip}:{port}')
         print(f'  Serving: {serve_dir}')
         print(f'  CORS proxy: /proxy/<encoded_url>')
         if FFMPEG_PATH:

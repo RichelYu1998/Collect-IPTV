@@ -410,7 +410,7 @@ run_collection() {
 
     if [ -f "$WORK_DIR/script/notify.py" ]; then
         echo "[*] 检测文件变更并发送通知..."
-        $PYTHON_CMD "$WORK_DIR/script/notify.py"
+        $PYTHON_CMD "$WORK_DIR/script/notify.py" --once
     fi
 
     echo ""

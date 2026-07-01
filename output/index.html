@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>IPTV直播源监控 | 自动更新每4小时</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
+    <script>LA.init({id:"3NGg3QcrPGDkrBIP",ck:"3NGg3QcrPGDkrBIP",autoTrack:true})</script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .copy-btn:active { transform: scale(0.95); }
+        #playerOverlay { transition: opacity 0.25s ease; }
+        #playerOverlay.hidden { opacity: 0; pointer-events: none; }
+        #playerOverlay.visible { opacity: 1; pointer-events: auto; }
+        #playerWrapper { transition: transform 0.25s ease; }
+        #playerOverlay.hidden #playerWrapper { transform: scale(0.95); }
+        #playerOverlay.visible #playerWrapper { transform: scale(1); }
+        #videoPlayer:fullscreen, #videoPlayer:-webkit-full-screen { width: 100%; height: 100%; background: #000; }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            body { font-size: 14px; }
+            h1 { font-size: 1.5rem !important; }
+            .container { padding-left: 12px !important; padding-right: 12px !important; }
+
+            /* 表格响应式 */
+            table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            thead, tbody, tr, th, td { display: block; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr { border: 1px solid #e5e7eb; margin-bottom: 8px; border-radius: 8px; padding: 12px; background: #fff; }
+            td { text-align: left !important; padding: 6px 10px !important; border: none !important; position: relative; padding-left: 45% !important; white-space: normal !important; }
+            td::before { content: attr(data-label); position: absolute; left: 10px; width: 40%; padding-right: 10px; white-space: nowrap; font-weight: 600; color: #6b7280; font-size: 13px; }
+
+            /* 隐藏 ID 列和 Logo 列在移动端 */
+            td:nth-of-type(1), td:nth-of-type(2) { display: none; }
+
+            /* 操作按钮优化 */
+            .flex.gap-2 button { padding: 8px 12px !important; font-size: 13px !important; flex: 1; justify-content: center; }
+
+            /* 搜索框全宽 */
+            #searchInput { min-width: 0 !important; }
+            select { font-size: 14px !important; }
+
+            /* 信息栏换行 */
+            .text-sm.text-gray-600 > div { margin-bottom: 4px; }
+            a.ml-auto { margin-left: 0 !important; margin-top: 8px; display: inline-block; }
+
+            /* 播放器适配 */
+            #playerWrapper { max-width: 100% !important; margin: 8px; border-radius: 12px; }
+            #playerWrapper .flex.items-center.justify-between { flex-wrap: wrap; gap: 8px; }
+            #playerWrapper .flex.items-center.gap-2 { order: 3; width: 100%; justify-content: center; }
+            #volumeSlider { width: 120px !important; }
+            video { aspect-ratio: 16/9; object-fit: contain; }
+
+            /* 按钮触控优化 */
+            button { min-height: 44px; -webkit-tap-highlight-color: transparent; }
+            .copy-btn { min-height: 36px; }
+
+            /* Footer */
+            footer { font-size: 12px; padding: 16px 0 !important; }
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.25rem !important; }
+            p { font-size: 13px; }
+            select { padding: 8px !important; }
+            td::before { font-size: 12px; }
+            td { font-size: 13px !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+            #playerWrapper { margin: 4px; border-radius: 8px; }
+            .fa-play-circle { font-size: 48px !important; }
+        }
+
+        /* 平板适配 */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .container { max-width: 95% !important; }
+            table th:nth-of-type(1), table td:nth-of-type(1) { width: 50px !important; }
+            table th:nth-of-type(2), table td:nth-of-type(2) { width: 70px !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">📡 IPTV直播源监控</h1>
+            <p class="text-gray-600">节目源每4小时自动更新 | 实时筛选 & 一键复制链接</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6 fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="flex flex-col md:flex-row gap-4 md:col-span-2">
+                    <select id="formatFilter" class="w-full md:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                        <option value="m3u" selected>M3U 格式</option>
+                        <option value="m3u8">M3U8 格式</option>
+                    </select>
+                    <select id="categoryFilter" class="w-full md:w-56 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                        <option value="">📁 所有分类</option>
+                    </select>
+                    <div class="flex flex-1 gap-3">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                <i class="fa fa-search"></i>
+                            </span>
+                            <input type="text" id="searchInput" placeholder="🔍 搜索频道名称..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                        </div>
+                        <button onclick="loadData()" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors whitespace-nowrap flex items-center gap-2">
+                            <i class="fa fa-refresh"></i> 刷新
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4 md:col-span-2 text-sm text-gray-600">
+                    <div class="flex items-center gap-2">
+                        <i class="fa fa-clock-o text-blue-500"></i>
+                        <span>当前时间：<span id="currentTime" class="font-medium text-blue-600">加载中...</span></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa fa-history text-green-500"></i>
+                        <span>数据版本：<span id="githubUpdateTime" class="font-medium text-green-600">加载中...</span></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa fa-list text-purple-500"></i>
+                        <span>频道总数：<span id="channelCount" class="font-medium text-purple-600">-</span></span>
+                    </div>
+                    <a href="https://github.com/zilong7728/Collect-IPTV" target="_blank" class="ml-auto flex items-center gap-1 hover:text-blue-600 transition-colors">
+                        <i class="fa fa-github"></i> GitHub项目 <i class="fa fa-external-link"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div id="loadingTip" class="bg-white rounded-lg shadow-sm p-8 text-center mb-6">
+            <div class="inline-block w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+            <p class="text-gray-600">正在加载最新的直播源数据...</p>
+        </div>
+
+        <div id="emptyTip" class="bg-white rounded-lg shadow-sm p-8 text-center mb-6 hidden">
+            <i class="fa fa-inbox text-4xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500">暂无匹配的频道数据</p>
+        </div>
+
+        <div id="errorTip" class="bg-red-50 border border-red-200 rounded-lg p-6 mb-6 hidden">
+            <div class="flex items-start gap-3">
+                <i class="fa fa-exclamation-circle text-red-500 text-xl mt-1"></i>
+                <div>
+                    <h3 class="font-medium text-red-800">数据加载失败</h3>
+                    <p id="errorMsg" class="text-sm text-red-700 mt-1">请稍后重试或检查网络连接</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="channelTable" class="bg-white rounded-lg shadow-sm overflow-hidden fade-in hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full" id="channelTableElement">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-16">#ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider w-24">台标</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">频道名称</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">分类</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channelList" class="divide-y divide-gray-200 bg-white"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <footer class="mt-12 text-center text-sm text-gray-500">
+            <p>© 2026 Collect-IPTV | 数据每4小时自动更新</p>
+        </footer>
+    </div>
+
+    <script>
+        const README_URL = 'https://raw.githubusercontent.com/zilong7728/Collect-IPTV/refs/heads/main/README.md';
+        let currentM3UUrl = '';
+        let allChannels = [];
+
+        const el = {
+            formatFilter: document.getElementById('formatFilter'),
+            categoryFilter: document.getElementById('categoryFilter'),
+            searchInput: document.getElementById('searchInput'),
+            currentTime: document.getElementById('currentTime'),
+            githubUpdateTime: document.getElementById('githubUpdateTime'),
+            channelCount: document.getElementById('channelCount'),
+            channelList: document.getElementById('channelList'),
+            loadingTip: document.getElementById('loadingTip'),
+            emptyTip: document.getElementById('emptyTip'),
+            channelTable: document.getElementById('channelTable'),
+            errorTip: document.getElementById('errorTip'),
+            errorMsg: document.getElementById('errorMsg')
+        };
+
+        function updateCurrentTime() {
+            const now = new Date();
+            el.currentTime.textContent = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        }
+        setInterval(updateCurrentTime, 1000);
+        updateCurrentTime();
+
+        function copyToClipboard(text, button) {
+            const originalText = button.innerHTML;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                button.innerHTML = '<i class="fa fa-check"></i> 已复制';
+                button.classList.add('bg-green-500');
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('bg-green-500');
+                }, 1500);
+            }).catch(err => {
+                button.innerHTML = '<i class="fa fa-times"></i> 复制失败';
+                button.classList.add('bg-red-500');
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('bg-red-500');
+                }, 1500);
+            });
+        }
+
+        function getLogoHtml(channel) {
+            const CDN_BASE = 'https://live.fanmingming.cn/tv/';
+
+            function normalizeName(name) {
+                let n = name.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+                n = n.replace(/\s*(超清|高清|HD|FHD|UHD|4K|8K)\s*/gi, '');
+                n = n.replace(/CCTV-(\d+)\s*$/i, 'CCTV$1');
+                n = n.replace(/CCTV-5\+/i, 'CCTV5Plus');
+                n = n.replace(/CCTV-(\d+)\s+.*$/i, 'CCTV$1');
+                n = n.replace(/CETV-(\d+)/i, 'CETV$1');
+                return n.trim();
+            }
+
+            function isValidLogoUrl(url) {
+                return url && url.startsWith('http') && !url.includes('tvg-id=') && !url.includes('tvg-name=');
+            }
+
+            function cdnUrl(name) {
+                return CDN_BASE + encodeURIComponent(name) + '.png';
+            }
+
+            const cleanName = normalizeName(channel.name);
+            const primaryUrl = isValidLogoUrl(channel.logo) ? channel.logo : cdnUrl(cleanName);
+            const fallbackUrl1 = cdnUrl(cleanName);
+
+            const altName = channel.name.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+            const fallbackUrl2 = cdnUrl(altName);
+
+            return `<img 
+                src="${primaryUrl}" 
+                loading="lazy"
+                alt="logo" 
+                class="h-8 max-w-[64px] object-contain rounded bg-gray-100/50 p-0.5" 
+                onerror="
+                    if (!this.dataset.retry1) {
+                        this.dataset.retry1 = '1';
+                        this.src = '${fallbackUrl1}';
+                    } else if (!this.dataset.retry2) {
+                        this.dataset.retry2 = '1';
+                        this.src = '${fallbackUrl2}';
+                    } else {
+                        this.onerror = null;
+                        this.outerHTML = '<span class=\\'text-xs text-gray-400\\'>无</span>';
+                    }
+                "
+            >`;
+        }
+
+        function renderChannels(channels) {
+            el.channelList.innerHTML = '';
+            el.channelCount.textContent = channels.length;
+
+            if (channels.length === 0) {
+                el.channelTable.classList.add('hidden');
+                el.emptyTip.classList.remove('hidden');
+                return;
+            }
+
+            el.emptyTip.classList.add('hidden');
+            el.channelTable.classList.remove('hidden');
+            
+            channels.forEach((channel, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+
+                const idCell = document.createElement('td');
+                idCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                idCell.setAttribute('data-label', '#ID');
+                idCell.textContent = String(index + 1);
+
+                const logoCell = document.createElement('td');
+                logoCell.className = 'px-6 py-4 whitespace-nowrap';
+                logoCell.setAttribute('data-label', '台标');
+                logoCell.innerHTML = getLogoHtml(channel);
+
+                const nameCell = document.createElement('td');
+                nameCell.className = 'px-6 py-4 text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors';
+                nameCell.setAttribute('data-label', '频道名称');
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'block max-w-[18rem] md:max-w-[30rem] truncate';
+                nameSpan.title = channel.name || '未知频道';
+                nameSpan.textContent = channel.name || '未知频道';
+                nameCell.appendChild(nameSpan);
+                if (channel.url) {
+                    nameCell.addEventListener('click', () => playChannel(channel.url, channel.name || ''));
+                }
+
+                const categoryCell = document.createElement('td');
+                categoryCell.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                categoryCell.setAttribute('data-label', '分类');
+                const categorySpan = document.createElement('span');
+                categorySpan.className = 'text-purple-600';
+                categorySpan.textContent = channel.category || '未分类';
+                categoryCell.appendChild(categorySpan);
+
+                const actionCell = document.createElement('td');
+                actionCell.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                actionCell.setAttribute('data-label', '操作');
+                const btnGroup = document.createElement('div');
+                btnGroup.className = 'flex items-center gap-2';
+
+                const playButton = document.createElement('button');
+                playButton.className = 'copy-btn text-green-600 hover:text-green-800 cursor-pointer bg-green-50 px-3 py-1.5 rounded hover:bg-green-100 transition-colors flex items-center gap-1';
+                playButton.innerHTML = '<i class="fa fa-play"></i> 播放';
+                playButton.addEventListener('click', () => playChannel(channel.url || '', channel.name || ''));
+                if (!channel.url) {
+                    playButton.disabled = true;
+                    playButton.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-btn text-blue-600 hover:text-blue-800 cursor-pointer bg-gray-100 px-3 py-1.5 rounded hover:bg-gray-200 transition-colors flex items-center gap-1';
+                copyButton.innerHTML = '<i class="fa fa-copy"></i> 复制链接';
+                copyButton.addEventListener('click', () => copyToClipboard(channel.url || '', copyButton));
+                if (!channel.url) {
+                    copyButton.disabled = true;
+                    copyButton.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+
+                btnGroup.appendChild(playButton);
+                btnGroup.appendChild(copyButton);
+                actionCell.appendChild(btnGroup);
+
+                row.appendChild(idCell);
+                row.appendChild(logoCell);
+                row.appendChild(nameCell);
+                row.appendChild(categoryCell);
+                row.appendChild(actionCell);
+                el.channelList.appendChild(row);
+            });
+        }
+
+        function parseM3UContent(content) {
+            const channels = [];
+            let currentChannel = {};
+            let lastCategory = '未分类'; 
+
+            content.split(/\r?\n/).forEach(line => {
+                line = line.trim();
+                if (!line) return;
+
+                if (line.startsWith('#EXTINF:')) {
+                    const nameMatch = line.match(/,([^,]*)$/);
+                    let channelName = nameMatch ? nameMatch[1].trim() : '未知频道';
+                    
+                    if (channelName.includes('tvg-') || channelName.includes('group-title')) {
+                        const simpleName = channelName.match(/([^\s"]+)$/);
+                        if (simpleName) channelName = simpleName[1].trim();
+                    }
+
+                    const groupMatch = line.match(/group-title="([^"]+)"/) || 
+                                       line.match(/group-title='([^']+)'/) ||
+                                       line.match(/group-title=([^ ,]+)/);
+                    
+                    if (groupMatch && groupMatch[1].trim()) {
+                        lastCategory = groupMatch[1].trim(); 
+                    }
+                    
+                    const logoMatch = line.match(/tvg-logo="([^"]+)"/) || line.match(/tvg-logo='([^']+)'/);
+                    let logoUrl = logoMatch ? logoMatch[1].trim() : '';
+                    if (logoUrl && (logoUrl.includes('tvg-id=') || logoUrl.includes('tvg-name=') || logoUrl.includes('group-title'))) {
+                        logoUrl = '';
+                    }
+                    
+                    currentChannel = {
+                        name: channelName,
+                        category: lastCategory,
+                        logo: logoUrl, 
+                        url: ''
+                    };
+                } 
+                else if (line.startsWith('#EXTGRP:')) {
+                    lastCategory = line.replace('#EXTGRP:', '').trim();
+                    if (currentChannel.name) {
+                        currentChannel.category = lastCategory;
+                    }
+                }
+                else if (line.startsWith('http') || line.startsWith('rtmp') || line.startsWith('mms') || line.startsWith('p3p')) {
+                    currentChannel.url = line.trim();
+                    if (currentChannel.name) {
+                        channels.push({...currentChannel});
+                    }
+                    currentChannel = {}; 
+                }
+            });
+            return channels;
+        }
+
+		function extractUrlFromReadme(readmeText, format) {
+			const regexList = format === 'm3u'
+				? [
+					/\s*\[.*?\]\((https:\/\/[^)]+\.m3u(?:\?[^)]*)?)\)/i,
+					/\s*\[.*?\]\((https:\/\/[^)]+\.m3u(?:\?[^)]*)?)\)/i
+				  ]
+				: [
+					/\s*\[.*?\]\((https:\/\/[^)]+\.m3u8(?:\?[^)]*)?)\)/i,
+					/\s*\[.*?\]\((https:\/\/[^)]+\.m3u8(?:\?[^)]*)?)\)/i
+				  ];
+
+			for (const regex of regexList) {
+				const match = readmeText.match(regex);
+				if (match) return match[1];
+			}
+			throw new Error(`未找到 ${format.toUpperCase()} 文件链接，请检查 README 中的标记`);
+		}
+
+        let filterDebounceTimer;
+        function filterChannels() {
+            clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                const searchText = el.searchInput.value.toLowerCase().trim();
+                const selectedCategory = el.categoryFilter.value;
+
+                const filtered = allChannels.filter(channel => {
+                    const nameMatch = channel.name.toLowerCase().includes(searchText);
+                    const categoryMatch = selectedCategory ? channel.category === selectedCategory : true;
+                    return nameMatch && categoryMatch;
+                });
+                renderChannels(filtered);
+            }, 300);
+        }
+
+        async function loadData() {
+            allChannels = [];
+            renderChannels([]);
+            el.githubUpdateTime.textContent = '加载中...';
+            el.loadingTip.classList.remove('hidden');
+            el.errorTip.classList.add('hidden');
+            el.emptyTip.classList.add('hidden');
+            el.channelTable.classList.add('hidden');
+
+            try {
+                const readmeRes = await fetch(README_URL);
+                if (!readmeRes.ok) throw new Error(`获取 README 失败：${readmeRes.status}`);
+                const readmeText = await readmeRes.text();
+
+                const timeMatch = readmeText.match(/\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+                if (timeMatch) el.githubUpdateTime.textContent = timeMatch[1];
+
+                const selectedFormat = el.formatFilter.value;
+                currentM3UUrl = extractUrlFromReadme(readmeText, selectedFormat);
+
+                const m3uRes = await fetch(currentM3UUrl);
+                if (!m3uRes.ok) throw new Error(`获取 ${selectedFormat.toUpperCase()} 文件失败：${m3uRes.status}`);
+                const m3uContent = await m3uRes.text();
+
+                allChannels = parseM3UContent(m3uContent);
+                
+                const categories = [...new Set(allChannels.map(c => c.category))].sort();
+                el.categoryFilter.innerHTML = `
+                    <option value="">📁 所有分类</option>
+                    ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                `;
+
+                renderChannels(allChannels);
+
+            } catch (error) {
+                console.error('加载失败:', error);
+                el.errorMsg.textContent = error.message || '未知错误，请稍后重试';
+                el.errorTip.classList.remove('hidden');
+                el.channelCount.textContent = '-';
+            } finally {
+                el.loadingTip.classList.add('hidden');
+            }
+        }
+
+        el.searchInput.addEventListener('input', filterChannels);
+        el.categoryFilter.addEventListener('change', filterChannels);
+        el.formatFilter.addEventListener('change', loadData);
+
+        let currentPlayUrl = '';
+        let currentPlayName = '';
+        let currentHls = null;
+        let currentTranscodeId = null;
+        let retryCount = 0;
+        let transcodeCheckTimer = null;
+        let ffmpegAvailable = null;
+        let audioProbeAbort = null;
+
+        function proxyUrl(url) {
+            if (!url) return '';
+            if (url.startsWith('/') || url.startsWith(window.location.origin)) return url;
+            const base = window.location.origin;
+            return base + '/proxy/' + encodeURIComponent(url);
+        }
+
+        function tryPlayWithSound(video) {
+            const startBtn = document.getElementById('startPlayBtn');
+            const slider = document.getElementById('volumeSlider');
+            video.volume = slider ? parseFloat(slider.value) : 1;
+            video.muted = false;
+            video.play().then(() => {
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.add('hidden');
+            }).catch(() => {
+                video.muted = true;
+                video.play().catch(() => {});
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.remove('hidden');
+            });
+        }
+
+        function playChannel(url, name) {
+            if (!url) return;
+            currentPlayUrl = url;
+            currentPlayName = name;
+            retryCount = 0;
+
+            const video = document.getElementById('videoPlayer');
+            const overlay = document.getElementById('playerOverlay');
+            const loading = document.getElementById('playerLoading');
+            const errorDiv = document.getElementById('playerError');
+            const startBtn = document.getElementById('startPlayBtn');
+            const title = document.getElementById('playerTitle');
+
+            if (!video || !overlay) return;
+
+            if (title) title.textContent = name || '未知频道';
+            if (loading) loading.classList.remove('hidden');
+            if (errorDiv) errorDiv.classList.add('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+
+            const slider = document.getElementById('volumeSlider');
+            video.volume = slider ? parseFloat(slider.value) : 1;
+            video.muted = false;
+            updateVolumeUI();
+
+            overlay.classList.remove('hidden');
+            overlay.classList.add('visible');
+
+            destroyHls();
+
+            const proxiedUrl = proxyUrl(url);
+
+            probeAudioInfo(url);
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                });
+                currentHls.loadSource(proxiedUrl);
+                currentHls.attachMedia(video);
+                currentHls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                    if (loading) loading.classList.add('hidden');
+                    tryPlayWithSound(video);
+                    checkAudioTracksFromHls(data);
+                });
+                currentHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (event, data) => {
+                    checkAudioTracksFromHls(data);
+                });
+                currentHls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        if (loading) loading.classList.add('hidden');
+                        if (startBtn) startBtn.classList.add('hidden');
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                if (!currentTranscodeId && !retryCount) {
+                                    retryCount++;
+                                    console.log('Network error, attempting transcode...');
+                                    startAudioTranscode('');
+                                } else {
+                                    showPlayerError('直播源暂时不可用，请稍后重试或更换其他频道');
+                                    retryCount = 0;
+                                }
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR ||
+                                    data.details === Hls.ErrorDetails.BUFFER_APPEND_ERROR) {
+                                    currentHls.startLoad();
+                                } else {
+                                    currentHls.recoverMediaError();
+                                }
+                                break;
+                            default:
+                                if (!currentTranscodeId && !retryCount) {
+                                    retryCount++;
+                                    console.log('Playback error, attempting transcode...');
+                                    startAudioTranscode('');
+                                } else {
+                                    showPlayerError('播放异常：' + (data.details || '未知错误'));
+                                    destroyHls();
+                                    retryCount = 0;
+                                }
+                                break;
+                        }
+                    } else if (data.details && data.details.indexOf('audio') !== -1) {
+                        if (!currentTranscodeId) {
+                            startAudioTranscode('');
+                        } else {
+                            showAudioWarning('音频解码失败，该频道可能使用了浏览器不支持的音频编码');
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = proxiedUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    if (loading) loading.classList.add('hidden');
+                    tryPlayWithSound(video);
+                }, { once: true });
+                video.addEventListener('error', () => {
+                    if (loading) loading.classList.add('hidden');
+                    showPlayerError('Safari 原生 HLS 播放失败');
+                }, { once: true });
+            } else {
+                if (loading) loading.classList.add('hidden');
+                showPlayerError('您的浏览器不支持 HLS 播放');
+            }
+        }
+
+        function checkAudioTracksFromHls(data) {
+            if (!currentHls || currentTranscodeId) return;
+
+            const levels = currentHls.levels || [];
+            for (const level of levels) {
+                if (level.audioCodec) {
+                    const codec = level.audioCodec.toLowerCase();
+                    if (codec.indexOf('ac-3') !== -1 || codec.indexOf('ac3') !== -1 ||
+                        codec.indexOf('ec-3') !== -1 || codec.indexOf('eac3') !== -1) {
+                        if (audioProbeAbort) {
+                            audioProbeAbort.abort();
+                            audioProbeAbort = null;
+                        }
+                        startAudioTranscode(level.audioCodec);
+                        return;
+                    }
+                }
+            }
+        }
+
+        async function probeAudioInfo(url) {
+            const audioWarning = document.getElementById('audioWarning');
+            if (!audioWarning) return;
+
+            if (audioProbeAbort) {
+                audioProbeAbort.abort();
+            }
+            audioProbeAbort = new AbortController();
+
+            try {
+                const resp = await fetch('/transcode/probe/' + encodeURIComponent(url), {
+                    signal: audioProbeAbort.signal
+                });
+                const data = await resp.json();
+
+                if (!currentHls || currentPlayUrl !== url) return;
+
+                if (data.error) {
+                    audioWarning.classList.add('hidden');
+                    return;
+                }
+
+                if (data.has_audio === false) {
+                    showAudioWarning('该频道无音频轨道（仅视频流）');
+                    return;
+                }
+
+                if (data.has_audio === true && data.unsupported && data.unsupported.length > 0) {
+                    const codecName = data.unsupported[0].toUpperCase();
+                    startAudioTranscode(codecName);
+                    return;
+                }
+
+                audioWarning.classList.add('hidden');
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                if (audioWarning && currentHls && currentPlayUrl === url) {
+                    audioWarning.classList.add('hidden');
+                }
+            }
+        }
+
+        async function startAudioTranscode(codecName, silentMode = false) {
+            if (currentTranscodeId) return;
+
+            if (ffmpegAvailable === null) {
+                try {
+                    const resp = await fetch('/transcode/check/');
+                    const data = await resp.json();
+                    ffmpegAvailable = data.ffmpeg;
+                } catch (e) {
+                    ffmpegAvailable = false;
+                }
+            }
+
+            if (!ffmpegAvailable) {
+                if (!silentMode) {
+                    showAudioWarning('音频编码 ' + (codecName || '') + ' 浏览器不支持，且未安装FFmpeg无法转码。请安装FFmpeg或用PotPlayer/VLC播放');
+                }
+                return;
+            }
+
+            const indicator = document.getElementById('transcodeIndicator');
+            const statusText = document.getElementById('transcodeStatusText');
+            const statusIcon = document.getElementById('playerStatusIcon');
+
+            if (indicator && statusText) {
+                indicator.classList.remove('hidden');
+                indicator.classList.add('flex');
+                statusText.textContent = '优化中...';
+            }
+            if (statusIcon) {
+                statusIcon.className = 'fa fa-cog text-blue-400 text-lg flex-shrink-0 fa-spin';
+            }
+
+            console.log('[Transcode] Starting transcode session for:', currentPlayUrl);
+
+            try {
+                const resp = await fetch('/transcode/start/' + encodeURIComponent(currentPlayUrl));
+                const data = await resp.json();
+
+                if (data.error) {
+                    hideTranscodeIndicator();
+                    if (!silentMode) {
+                        showAudioWarning('转码启动失败: ' + data.error);
+                    }
+                    return;
+                }
+
+                currentTranscodeId = data.session_id;
+                console.log('[Transcode] Session started:', currentTranscodeId);
+                pollTranscodeStatus(silentMode);
+            } catch (e) {
+                hideTranscodeIndicator();
+                if (!silentMode) {
+                    showAudioWarning('转码请求失败: ' + e.message);
+                }
+            }
+        }
+
+        function hideTranscodeIndicator() {
+            const indicator = document.getElementById('transcodeIndicator');
+            const statusIcon = document.getElementById('playerStatusIcon');
+            if (indicator) {
+                indicator.classList.add('hidden');
+                indicator.classList.remove('flex');
+            }
+            if (statusIcon) {
+                statusIcon.className = 'fa fa-play-circle text-green-400 text-lg flex-shrink-0';
+            }
+        }
+
+        function pollTranscodeStatus(silentMode = false) {
+            if (transcodeCheckTimer) clearInterval(transcodeCheckTimer);
+
+            let attempts = 0;
+            transcodeCheckTimer = setInterval(async () => {
+                attempts++;
+                if (attempts > 40 || !currentTranscodeId) {
+                    clearInterval(transcodeCheckTimer);
+                    transcodeCheckTimer = null;
+                    if (currentTranscodeId) {
+                        console.log('[Transcode] Timeout after', attempts, 'attempts');
+                        hideTranscodeIndicator();
+                        if (!silentMode) {
+                            showAudioWarning('加载超时，请稍后重试');
+                        }
+                        stopTranscode();
+                    }
+                    return;
+                }
+
+                try {
+                    const resp = await fetch('/transcode/status/' + currentTranscodeId);
+                    const data = await resp.json();
+
+                    if (!data.alive) {
+                        clearInterval(transcodeCheckTimer);
+                        transcodeCheckTimer = null;
+                        console.log('[Transcode] FFmpeg process exited unexpectedly');
+                        hideTranscodeIndicator();
+                        if (!silentMode) {
+                            showAudioWarning('直播流异常中断');
+                        }
+                        currentTranscodeId = null;
+                        return;
+                    }
+
+                    if (data.ready) {
+                        clearInterval(transcodeCheckTimer);
+                        transcodeCheckTimer = null;
+                        switchToTranscodeStream();
+                    }
+                } catch (e) {
+                    // ignore, retry
+                }
+            }, 500);
+        }
+
+        function switchToTranscodeStream() {
+            console.log('[Transcode] Stream ready, switching to transcoded stream:', currentTranscodeId);
+
+            const video = document.getElementById('videoPlayer');
+            const loading = document.getElementById('playerLoading');
+            const startBtn = document.getElementById('startPlayBtn');
+            const errorDiv = document.getElementById('playerError');
+            if (!video) return;
+
+            if (loading) loading.classList.remove('hidden');
+            if (startBtn) startBtn.classList.add('hidden');
+            if (errorDiv) errorDiv.classList.add('hidden');
+
+            retryCount = 0;
+
+            const statusText = document.getElementById('transcodeStatusText');
+            if (statusText) statusText.textContent = '连接中...';
+
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+
+            const transcodeUrl = '/tstream/' + currentTranscodeId + '/index.m3u8';
+            console.log('[Transcode] Loading transcoded URL:', transcodeUrl);
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                });
+                currentHls.loadSource(transcodeUrl);
+                currentHls.attachMedia(video);
+                currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    console.log('[Transcode] Transcoded stream manifest loaded successfully');
+                    hideTranscodeIndicator();
+                    if (loading) loading.classList.add('hidden');
+                    tryPlayWithSound(video);
+                });
+                currentHls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        console.error('[Transcode] Error playing transcoded stream:', data);
+                        if (loading) loading.classList.add('hidden');
+                        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            currentHls.recoverMediaError();
+                        } else {
+                            showPlayerError('直播流异常中断，请重试');
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = transcodeUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    console.log('[Transcode] Safari native HLS loaded metadata');
+                    hideTranscodeIndicator();
+                    if (loading) loading.classList.add('hidden');
+                    tryPlayWithSound(video);
+                }, { once: true });
+            }
+
+            const audioWarning = document.getElementById('audioWarning');
+            if (audioWarning) audioWarning.classList.add('hidden');
+        }
+
+        function stopTranscode() {
+            if (transcodeCheckTimer) {
+                clearInterval(transcodeCheckTimer);
+                transcodeCheckTimer = null;
+            }
+            if (currentTranscodeId) {
+                const sid = currentTranscodeId;
+                currentTranscodeId = null;
+                fetch('/transcode/stop/' + sid).catch(() => {});
+            }
+        }
+
+        function showAudioWarning(msg) {
+            const audioWarning = document.getElementById('audioWarning');
+            const audioWarningMsg = document.getElementById('audioWarningMsg');
+            if (audioWarningMsg) audioWarningMsg.textContent = msg;
+            if (audioWarning) audioWarning.classList.remove('hidden');
+        }
+
+        function startPlay() {
+            const video = document.getElementById('videoPlayer');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (!video) return;
+            tryPlayWithSound(video);
+            setTimeout(() => checkAudioTracksDelayed(), 3000);
+        }
+
+        function checkAudioTracksDelayed() {
+            const video = document.getElementById('videoPlayer');
+            const audioWarning = document.getElementById('audioWarning');
+            if (!video || !currentHls || !audioWarning) return;
+
+            if (!audioWarning.classList.contains('hidden')) return;
+
+            if (!currentTranscodeId) {
+                probeAudioInfo(currentPlayUrl);
+            }
+        }
+
+        function toggleMute() {
+            const video = document.getElementById('videoPlayer');
+            const btn = document.getElementById('muteBtn');
+            const slider = document.getElementById('volumeSlider');
+            const label = document.getElementById('volumeLabel');
+            if (!video) return;
+            video.muted = !video.muted;
+            updateVolumeUI();
+        }
+
+        function setVolume(val) {
+            const video = document.getElementById('videoPlayer');
+            if (!video) return;
+            video.volume = parseFloat(val);
+            if (video.muted && parseFloat(val) > 0) {
+                video.muted = false;
+            }
+            updateVolumeUI();
+        }
+
+        function updateVolumeUI() {
+            const video = document.getElementById('videoPlayer');
+            const btn = document.getElementById('muteBtn');
+            const slider = document.getElementById('volumeSlider');
+            const label = document.getElementById('volumeLabel');
+            if (!video || !btn || !slider || !label) return;
+
+            const vol = video.muted ? 0 : video.volume;
+            slider.value = video.muted ? 0 : video.volume;
+            label.textContent = Math.round(vol * 100) + '%';
+
+            if (video.muted || video.volume === 0) {
+                btn.innerHTML = '<i class="fa fa-volume-off text-lg"></i>';
+                btn.title = '取消静音';
+            } else if (video.volume < 0.5) {
+                btn.innerHTML = '<i class="fa fa-volume-down text-lg"></i>';
+                btn.title = '静音';
+            } else {
+                btn.innerHTML = '<i class="fa fa-volume-up text-lg"></i>';
+                btn.title = '静音';
+            }
+        }
+
+        function destroyHls() {
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+            if (audioProbeAbort) {
+                audioProbeAbort.abort();
+                audioProbeAbort = null;
+            }
+            const video = document.getElementById('videoPlayer');
+            video.removeAttribute('src');
+            video.load();
+            const audioWarning = document.getElementById('audioWarning');
+            if (audioWarning) audioWarning.classList.add('hidden');
+            stopTranscode();
+        }
+
+        function showPlayerError(msg) {
+            const errorDiv = document.getElementById('playerError');
+            const errorMsg = document.getElementById('playerErrorMsg');
+            if (errorMsg) errorMsg.textContent = msg;
+            if (errorDiv) errorDiv.classList.remove('hidden');
+        }
+
+        function closePlayer(event) {
+            if (event && event.target !== document.getElementById('playerOverlay')) return;
+            const overlay = document.getElementById('playerOverlay');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (overlay) {
+                overlay.classList.remove('visible');
+                overlay.classList.add('hidden');
+            }
+            if (startBtn) startBtn.classList.add('hidden');
+            hideTranscodeIndicator();
+            stopTranscode();
+            destroyHls();
+        }
+
+        function retryPlay() {
+            if (currentPlayUrl) {
+                playChannel(currentPlayUrl, currentPlayName);
+            }
+        }
+
+        function toggleFullscreen() {
+            const container = document.getElementById('videoContainer');
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else if (container.requestFullscreen) {
+                container.requestFullscreen();
+            } else if (container.webkitRequestFullscreen) {
+                container.webkitRequestFullscreen();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const overlay = document.getElementById('playerOverlay');
+                if (overlay.classList.contains('visible')) {
+                    closePlayer();
+                }
+            }
+        });
+
+        document.addEventListener('click', () => {
+            const video = document.getElementById('videoPlayer');
+            const startBtn = document.getElementById('startPlayBtn');
+            if (video && video.muted && !video.paused && currentHls) {
+                video.muted = false;
+                updateVolumeUI();
+                if (startBtn) startBtn.classList.add('hidden');
+            }
+        }, true);
+
+        window.addEventListener('DOMContentLoaded', loadData);
+    </script>
+
+    <div id="playerOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onclick="closePlayer(event)">
+        <div id="playerWrapper" class="bg-gray-900 rounded-xl shadow-2xl overflow-hidden w-full max-w-4xl" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between px-5 py-3 bg-gray-800">
+                <div class="flex items-center gap-3 min-w-0">
+                    <i id="playerStatusIcon" class="fa fa-play-circle text-green-400 text-lg flex-shrink-0"></i>
+                    <span id="playerTitle" class="text-white font-medium truncate">正在播放</span>
+                    <div id="transcodeIndicator" class="hidden items-center gap-1.5 px-2 py-0.5 bg-blue-500/20 rounded-full text-xs text-blue-300">
+                        <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+                        <span id="transcodeStatusText">优化中</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                     <button id="muteBtn" onclick="toggleMute()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="静音">
+                        <i class="fa fa-volume-up text-lg"></i>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1"
+                            oninput="setVolume(this.value)" class="w-20 accent-blue-500 cursor-pointer" style="height:4px;">
+                        <span id="volumeLabel" class="text-gray-300 text-xs min-w-[32px] text-right">100%</span>
+                    </div>
+                    <button onclick="toggleFullscreen()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="全屏">
+                        <i class="fa fa-expand text-lg"></i>
+                    </button>
+                    <button onclick="closePlayer()" class="text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-gray-700" title="关闭">
+                        <i class="fa fa-times text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="audioWarning" class="hidden bg-yellow-900/80 border-t border-yellow-600 px-4 py-2 flex items-center gap-2">
+                <i class="fa fa-exclamation-triangle text-yellow-400 text-sm flex-shrink-0"></i>
+                <span id="audioWarningMsg" class="text-yellow-200 text-xs">音频提示</span>
+            </div>
+            <div id="videoContainer" class="relative bg-black aspect-video">
+                <video id="videoPlayer" class="w-full h-full" playsinline></video>
+                <div id="startPlayBtn" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 cursor-pointer hidden" onclick="startPlay()">
+                    <i class="fa fa-play-circle text-white text-6xl mb-3 opacity-90 hover:opacity-100 transition-opacity"></i>
+                    <p class="text-white text-sm">点击开启声音</p>
+                </div>
+                <div id="playerLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 hidden pointer-events-none">
+                    <div class="inline-block w-10 h-10 border-4 border-gray-600 border-t-green-400 rounded-full animate-spin mb-3"></div>
+                    <p class="text-gray-300 text-sm">正在加载直播流...</p>
+                </div>
+                <div id="playerError" class="absolute inset-0 flex flex-col items-center justify-center bg-black/80 hidden">
+                    <i class="fa fa-exclamation-triangle text-yellow-400 text-3xl mb-3"></i>
+                    <p id="playerErrorMsg" class="text-gray-300 text-sm mb-4">播放失败</p>
+                    <button onclick="retryPlay()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                        <i class="fa fa-refresh"></i> 重试
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
