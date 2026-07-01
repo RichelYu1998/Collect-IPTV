@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import sys
 import platform
@@ -56,6 +56,38 @@ preload_executor = None
 preload_pipelines = {}
 
 PROJECT_ROOT = Path(__file__).parent
+
+def get_ffmpeg_platform_dir():
+    """根据操作系统返回对应的 FFmpeg 预编译版本目录"""
+    platform_dirs = {
+        'windows': 'windows',
+        'linux': 'linux',
+        'mac': 'macos',
+    }
+    
+    try:
+        os_info = detect_os()
+        current_os = os_info.get('os', '').lower()
+        platform_dir = platform_dirs.get(current_os, current_os)
+        
+        # 优先使用项目根目录下的预编译版本
+        prebuilt_dir = PROJECT_ROOT / 'ffmpeg' / platform_dir / 'bin'
+        
+        if prebuilt_dir.exists():
+            print(f"[*] 使用预编译 FFmpeg: {prebuilt_dir}")
+            return prebuilt_dir
+        
+        # 回退到 .venv 目录（兼容旧版或自动安装）
+        fallback_dir = PROJECT_ROOT / '.venv' / 'ffmpeg'
+        print(f"[*] 使用 .venv FFmpeg 目录: {fallback_dir}")
+        return fallback_dir
+        
+    except Exception as e:
+        print(f"[!] 检测系统失败，使用默认路径: {e}")
+        return PROJECT_ROOT / '.venv' / 'ffmpeg'
+
+
+# 初始化时使用临时值，稍后在 main() 中会更新
 FFMPEG_INSTALL_DIR = PROJECT_ROOT / '.venv' / 'ffmpeg'
 
 M3U8_CONTENT_TYPES = (
@@ -94,6 +126,9 @@ def detect_os():
 
 
 def check_ffmpeg_installed():
+    # 确保使用正确的平台目录
+    global FFMPEG_INSTALL_DIR
+    FFMPEG_INSTALL_DIR = get_ffmpeg_platform_dir()
     os_info = detect_os()
     ffmpeg_path = FFMPEG_INSTALL_DIR / 'bin' / f'ffmpeg{os_info["ext"]}'
     ffprobe_path = FFMPEG_INSTALL_DIR / 'bin' / f'ffprobe{os_info["ext"]}'
@@ -320,6 +355,10 @@ def setup_ffmpeg():
     os_info = detect_os()
     current_os = os_info['os']
     print(f"\n[*] 检测到系统: {current_os.upper()} ({os_info['arch']})")
+
+    # 更新 FFmpeg 安装目录为平台对应的预编译版本目录
+    global FFMPEG_INSTALL_DIR
+    FFMPEG_INSTALL_DIR = get_ffmpeg_platform_dir()
 
     if check_ffmpeg_installed():
         print("\nFFmpeg 已就绪！")
