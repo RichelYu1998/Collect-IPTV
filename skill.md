@@ -1063,11 +1063,11 @@ while True:
 
 #### 5.1 _probe_audio_fast 函数
 
-直接解析TS包结构，无需ffprobe/ffmpeg，非加密流秒级完成：
+直接解析TS包结构，无需ffprobe/ffmpeg，非加密流亚秒级完成：
 
 ```
-1. 下载m3u8 → 解析第一个TS分片URL
-2. 下载256KB TS数据
+1. 下载m3u8(4KB, 超时3秒) → 解析第一个TS分片URL
+2. 下载32KB TS数据(超时3秒)
 3. 遍历TS包(188字节): 0x47同步 → PID → PUSI标志
 4. 处理adaptation field + pointer byte
 5. 识别PES stream_id:
@@ -1084,9 +1084,22 @@ _probe_audio_fast() → ffprobe → ffmpeg -i → 返回错误
 
 | 方法 | 非加密流 | 加密流 |
 |------|---------|--------|
-| _probe_audio_fast | ~1-2秒 | 自动跳过 |
-| ffprobe | ~3-5秒 | ~8-10秒 |
-| ffmpeg -i | ~5-8秒 | ~8-12秒 |
+| _probe_audio_fast | ~0.3-0.8秒 | 自动跳过 |
+| ffprobe | ~1-2秒 | ~2-3秒 |
+| ffmpeg -i | ~1-2秒 | ~2-4秒 |
+
+#### 5.3 关键参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| m3u8下载量 | 4KB | m3u8文本通常<2KB |
+| m3u8超时 | 3秒 | 快速失败 |
+| TS分片下载量 | 32KB | ≈170个TS包，足够检测所有音频PID |
+| TS分片超时 | 3秒 | 快速失败 |
+| ffprobe probesize | 256K | 音频编解码信息在前几十KB |
+| ffprobe超时 | 3秒 | 配合小probesize |
+| ffmpeg加密流超时 | 4秒 | 加密流需稍多时间解密 |
+| ffmpeg非加密流超时 | 3秒 | 256K probesize足够 |
 
 ### 六、预加载等待时间优化
 

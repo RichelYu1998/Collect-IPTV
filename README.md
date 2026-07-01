@@ -577,12 +577,13 @@ Made with ❤️ by Collect-IPTV Team
 - ⚡ 添加+fastseek标志
 
 #### 🔧 优化改进 - 音频探测
-- ⚡ _probe_audio_fast：下载m3u8→解析TS分片URL→下载256KB TS数据→解析TS包结构
+- ⚡ _probe_audio_fast：下载m3u8→解析TS分片URL→下载32KB TS数据→解析TS包结构
 - ⚡ 支持mp2/mp3/ac3/eac3/dts编码识别
 - ⚡ 加密流检测：pointer byte > 183说明加密，自动切换ffmpeg探测
-- ⚡ 加密流ffmpeg探测：增加user_agent、较大probesize(1M)、12秒超时
-- ⚡ 非加密流ffmpeg探测：极小probesize(500KB)、8秒超时
-- ⚡ ffprobe探测：缩小analyzeduration/probesize到2M，超时10秒
+- ⚡ 非加密流探测：约0.3-0.8秒（m3u8超时3秒、TS超时3秒、下载32KB）
+- ⚡ 加密流探测：约2-4秒（ffmpeg probesize 256K、超时4秒）
+- ⚡ ffprobe探测：analyzeduration/probesize 256K，超时3秒
+- ⚡ ffmpeg非加密流回退：probesize 256K，超时3秒
 
 #### 🐛 Bug修复
 - ✅ 修复mpegts.js无法播放HLS流（根因：mpegts.js不支持m3u8播放列表解析）
