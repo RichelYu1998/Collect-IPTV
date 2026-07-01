@@ -11,10 +11,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -32,13 +31,23 @@ jobs:
         sed -i "s|<!-- Last Run Time -->.*|<!-- Last Run Time --> ${GET_TIME}|" README.md
         sed -i "s|<!-- Generated File Link M3U -->.*|<!-- Generated File Link M3U --> [View M3U File](${file_link})|" README.md
         sed -i "s|<!-- Generated File Link M3U8 -->.*|<!-- Generated File Link M3U8 --> [View M3U8 File](${file_link1})|" README.md
-    - name: Commit changes
-      env:
-        REPO_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+    - name: Commit and push changes
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git remote set-url origin $REPO_URL
-        git add README.md file/best_sorted.m3u file/best_sorted.m3u8
-        git commit -am "自动更新：${GET_TIME}"
-        git push origin main
+        
+        if [ -f "README.md" ] && [ -f "file/best_sorted.m3u" ] && [ -f "file/best_sorted.m3u8" ]; then
+          git add README.md file/best_sorted.m3u file/best_sorted.m3u8
+          
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "自动更新：${GET_TIME}"
+            git push origin HEAD:${{ github.ref }}
+            echo "Changes pushed successfully"
+          fi
+        else
+          echo "Error: Required files not found"
+          ls -lh README.md file/
+          exit 1
+        fi
