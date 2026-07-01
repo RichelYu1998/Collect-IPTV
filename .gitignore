@@ -36,10 +36,10 @@ env/
 .DS_Store
 Thumbs.db
 
-# Generated files
-*.m3u
-*.m3u8
-best_sorted.*
+# Generated files (except output files in file/)
+!file/*.m3u
+!file/*.m3u8
+!file/best_sorted.*
 
 # Logs
 *.log
