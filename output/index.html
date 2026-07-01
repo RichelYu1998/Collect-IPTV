@@ -663,9 +663,11 @@
             audioProbeAbort = new AbortController();
 
             try {
+                const probeTimeout = setTimeout(() => audioProbeAbort.abort(), 10000);
                 const resp = await fetch('/transcode/probe/' + encodeURIComponent(url), {
                     signal: audioProbeAbort.signal
                 });
+                clearTimeout(probeTimeout);
                 const data = await resp.json();
 
                 if (!currentPlayer || currentPlayUrl !== url) return;

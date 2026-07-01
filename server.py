@@ -783,6 +783,10 @@ def find_ffprobe():
 
 
 def probe_audio_info(url):
+    result = _probe_audio_fast(url)
+    if result is not None:
+        return result
+
     ffprobe_path = find_ffprobe()
 
     if ffprobe_path:
@@ -792,9 +796,13 @@ def probe_audio_info(url):
             '-print_format', 'json',
             '-show_streams',
             '-select_streams', 'a',
-            '-analyzeduration', '5000000',
-            '-probesize', '5000000',
+            '-analyzeduration', '2000000',
+            '-probesize', '2000000',
             '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            '-timeout', '5000000',
+            '-rw_timeout', '5000000',
+            '-fflags', '+genpts+discardcorrupt+fastseek',
+            '-max_delay', '0',
             url,
         ]
 
@@ -802,7 +810,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 15,
+                'timeout': 10,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -829,6 +837,10 @@ def probe_audio_info(url):
     if FFMPEG_PATH:
         cmd = [
             FFMPEG_PATH,
+            '-nostdin',
+            '-fflags', '+genpts+discardcorrupt',
+            '-analyzeduration', '2000000',
+            '-probesize', '2000000',
             '-i', url,
             '-hide_banner',
             '-t', '0',
@@ -840,7 +852,7 @@ def probe_audio_info(url):
             kwargs = {
                 'capture_output': True,
                 'text': True,
-                'timeout': 15,
+                'timeout': 10,
             }
             if os.name == 'nt':
                 kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
@@ -850,11 +862,9 @@ def probe_audio_info(url):
             unsupported = []
             has_audio = False
 
-            audio_section = False
             for line in stderr.split('\n'):
                 if 'Audio:' in line:
                     has_audio = True
-                    audio_section = True
                     parts = line.split('Audio:')[1].strip()
                     codec_part = parts.split(',')[0].strip().split(' ')[0]
                     codecs.append(codec_part)
@@ -873,6 +883,157 @@ def probe_audio_info(url):
             return {'has_audio': None, 'error': str(e)}
 
     return {'has_audio': None, 'error': 'no_ffprobe'}
+
+
+def _probe_audio_fast(url):
+    try:
+        is_m3u8 = url.endswith('.m3u8') or url.endswith('.m3u') or '.m3u8?' in url or '.m3u?' in url
+        if not is_m3u8:
+            return None
+
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = resp.read(8192)
+        text = data.decode('utf-8', errors='replace')
+
+        if '#EXTINF' not in text and '#EXT-X-' not in text:
+            return None
+
+        seg_url = None
+        for line in text.split('\n'):
+            s = line.strip()
+            if s and not s.startswith('#'):
+                if s.startswith('http://') or s.startswith('https://'):
+                    seg_url = s
+                else:
+                    seg_url = urllib.parse.urljoin(url, s)
+                break
+
+        if not seg_url:
+            return None
+
+        seg_req = urllib.request.Request(seg_url)
+        seg_req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        with urllib.request.urlopen(seg_req, timeout=8) as seg_resp:
+            seg_data = seg_resp.read(262144)
+
+        if len(seg_data) < 188:
+            return None
+
+        codecs_found = []
+        unsupported = []
+        is_encrypted = False
+
+        i = 0
+        while i < len(seg_data) - 3:
+            if seg_data[i] == 0x47:
+                pusi = (seg_data[i + 1] & 0x40) != 0
+                pid = ((seg_data[i + 1] & 0x1F) << 8) | seg_data[i + 2]
+                adaptation = (seg_data[i + 3] >> 4) & 0x03
+                offset = 4
+                if adaptation in (2, 3):
+                    adapt_len = seg_data[i + 4] if i + 4 < len(seg_data) else 0
+                    offset += 1 + adapt_len
+                if pusi and offset < len(seg_data) and adaptation != 2:
+                    pointer = seg_data[offset]
+                    if pointer > 183:
+                        is_encrypted = True
+                        break
+                    pes_offset = offset + 1 + pointer
+                    if pes_offset + 9 < len(seg_data):
+                        if seg_data[pes_offset] == 0 and seg_data[pes_offset + 1] == 0 and seg_data[pes_offset + 2] == 1:
+                            stream_id = seg_data[pes_offset + 3]
+                            if 0xC0 <= stream_id <= 0xDF:
+                                codec = 'mp2'
+                                audio_data_offset = pes_offset + 9
+                                if audio_data_offset + 4 <= len(seg_data):
+                                    hdr = seg_data[audio_data_offset:audio_data_offset + 4]
+                                    if len(hdr) >= 2:
+                                        bits = (hdr[0] << 8) | hdr[1]
+                                        layer = (bits >> 1) & 0x03
+                                        if layer == 1:
+                                            codec = 'mp3'
+                                codecs_found.append(codec)
+                                if codec in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                                    unsupported.append(codec)
+                            elif stream_id == 0xBD:
+                                sub_start = pes_offset + 9
+                                if sub_start + 4 <= len(seg_data):
+                                    sub_id = seg_data[sub_start]
+                                    if sub_id >= 0x80:
+                                        if sub_id >= 0xA0:
+                                            codec = 'dts'
+                                        elif sub_id >= 0x88:
+                                            codec = 'eac3'
+                                        else:
+                                            codec = 'ac3'
+                                        codecs_found.append(codec)
+                                        if codec in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                                            unsupported.append(codec)
+                i += 188
+            else:
+                i += 1
+
+        if codecs_found:
+            return {'has_audio': True, 'codecs': codecs_found, 'unsupported': unsupported}
+
+        if not FFMPEG_PATH:
+            return None
+
+        if is_encrypted:
+            cmd = [
+                FFMPEG_PATH,
+                '-nostdin',
+                '-fflags', '+genpts+discardcorrupt',
+                '-analyzeduration', '2000000',
+                '-probesize', '1000000',
+                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                '-i', url,
+                '-hide_banner',
+                '-t', '0',
+                '-f', 'null',
+                '-',
+            ]
+            kwargs = {
+                'capture_output': True,
+                'text': True,
+                'timeout': 12,
+            }
+        else:
+            cmd = [
+                FFMPEG_PATH,
+                '-nostdin',
+                '-fflags', '+genpts+discardcorrupt',
+                '-analyzeduration', '1000000',
+                '-probesize', '500000',
+                '-i', url,
+                '-hide_banner',
+                '-t', '0',
+                '-f', 'null',
+                '-',
+            ]
+            kwargs = {
+                'capture_output': True,
+                'text': True,
+                'timeout': 8,
+            }
+        if os.name == 'nt':
+            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+        result = subprocess.run(cmd, **kwargs)
+        for line in result.stderr.split('\n'):
+            if 'Audio:' in line:
+                parts = line.split('Audio:')[1].strip()
+                codec_part = parts.split(',')[0].strip().split(' ')[0]
+                codecs_found.append(codec_part)
+                if codec_part in ('ac3', 'eac3', 'dts', 'dtshd', 'truehd', 'mlp'):
+                    unsupported.append(codec_part)
+        if codecs_found:
+            return {'has_audio': True, 'codecs': codecs_found, 'unsupported': unsupported}
+
+        return None
+    except Exception:
+        return None
 
 
 def probe_audio_cached(url):
@@ -1690,5 +1851,3 @@ if __name__ == '__main__':
         sys.exit(0 if success else 1)
     else:
         main()
-
-
