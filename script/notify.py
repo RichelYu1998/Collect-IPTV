@@ -197,48 +197,53 @@ def send_email(config, changes):
 
 
 def check_and_notify(config):
-    """检测变更并发送邮件（含附件）"""
-    changes = detect_changes(config)
+    """检测变更并发送邮件（含附件）- 首次或变化即发送"""
+    watch_files = config.get('watch_files', ['best_sorted.m3u', 'best_sorted.m3u8'])
+    old_hashes = load_hashes()
     
-    if not changes:
+    # 检查是否有历史记录（首次运行）
+    is_first_run = (not old_hashes or len(old_hashes) == 0)
+    
+    # 查找存在的文件
+    existing_files = []
+    for fname in watch_files:
+        fpath = PROJECT_ROOT / fname
+        if fpath.exists():
+            current_hash = file_hash(str(fpath))
+            if current_hash:
+                existing_files.append({
+                    'file': fname,
+                    'type': 'new' if is_first_run else 'updated',
+                    'detail': '首次生成文件' if is_first_run else '文件已更新',
+                    'filepath': str(fpath),
+                    'hash': current_hash
+                })
+                
+                # 更新哈希记录
+                old_hashes[fname] = current_hash
+    
+    # 如果没有找到任何文件
+    if not existing_files:
+        if is_first_run:
+            print('[通知] 首次运行，未找到监控文件')
         return False
     
-    print(f'[通知] 检测到 {len(changes)} 个文件变更:')
-    for c in changes:
-        print(f'    [{c["type"]}] {c["file"]} - {c["detail"]}')
+    # 显示检测到的文件
+    action_type = "首次运行" if is_first_run else "文件变更"
+    print(f'[通知] {action_type} - 检测到 {len(existing_files)} 个文件:')
+    for f in existing_files:
+        print(f'    [{f["type"]}] {f["file"]} - {f["detail"]}')
     
-    cooldown = int(config.get('email_cooldown_seconds', 300))
-    hash_data = load_hashes()
-    last_sent = hash_data.get('_last_email_sent', 0)
-    now = time.time()
-
-    if now - last_sent < cooldown:
-        remaining = int(cooldown - (now - last_sent))
-        print(f'[通知] 邮件冷却中，剩余 {remaining} 秒')
-        return False
+    # 直接发送邮件（无冷却限制）
+    success = send_email(config, existing_files)
     
-    success = send_email(config, changes)
-
     if success:
-        hash_data = load_hashes()
-        hash_data['_last_email_sent'] = now
-        hash_data['_email_fail_count'] = 0
-        save_hashes(hash_data)
+        # 保存最新的哈希记录
+        save_hashes(old_hashes)
+        print(f'[通知] ✓ 邮件发送成功 ({action_type})')
         return True
     else:
-        hash_data = load_hashes()
-        fail_count = hash_data.get('_email_fail_count', 0) + 1
-        max_fail = int(config.get('email_max_fail_count', 3))
-        fail_cooldown = int(config.get('email_fail_cooldown_seconds', 1800))
-
-        if fail_count >= max_fail:
-            hash_data['_email_fail_count'] = 0
-            hash_data['_last_email_sent'] = now + fail_cooldown - cooldown
-            print(f'[通知] 连续发送失败 {fail_count} 次，暂停 {fail_cooldown} 秒')
-        else:
-            hash_data['_email_fail_count'] = fail_count
-
-        save_hashes(hash_data)
+        print('[通知] ✗ 邮件发送失败')
         return False
 
 
@@ -259,9 +264,9 @@ def main():
     print('=' * 60)
     print(f'[通知] 监控文件: {config.get("watch_files", [])}')
     print(f'[通知] 检查间隔: {interval} 秒')
-    print(f'[通知] 邮件冷却: {config.get("email_cooldown_seconds", 300)} 秒')
+    print(f'[通知] 发送策略: 首次运行或文件变化时立即发送')
     print(f'[通知] 接收邮箱: {config.get("email_to", "未设置")}')
-    print(f'[通知] 附件模式: 开启 (变更文件将作为附件发送)')
+    print(f'[通知] 附件模式: 开启 (M3U/M3U8文件将作为附件发送)')
     print('=' * 60)
     print('[通知] 开始监控... (按 Ctrl+C 停止)')
     print('')
@@ -279,3 +284,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
