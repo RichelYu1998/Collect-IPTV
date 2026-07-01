@@ -263,11 +263,11 @@ def main():
     
     config = load_config()
     if not config:
-        return
+        return 1
 
     if not config.get('email_notification_enabled', False):
         print('[通知] 邮件通知未启用，跳过')
-        return
+        return 2
     
     # 检查是否为单次模式（从bat/sh脚本调用）
     is_single_run = '--once' in sys.argv or len(sys.argv) > 1
@@ -303,9 +303,11 @@ def main():
         success = check_and_notify(config)
         if success:
             print('[通知] ✓ 单次检测完成')
+            return 0
         else:
             print('[通知] 单次检测完成（无变更或发送失败）')
+            return 3
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)

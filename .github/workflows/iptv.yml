@@ -96,13 +96,41 @@ jobs:
         echo "=== 发送邮件通知 ==="
         python script/notify.py --once
         EXIT_CODE=$?
-        if [ $EXIT_CODE -eq 0 ]; then
-          echo "✅ 邮件通知发送成功"
-          echo "EMAIL_SENT=true" >> $GITHUB_ENV
-        else
-          echo "⚠️ 邮件通知跳过（无变更或首次运行已标记）"
-          echo "EMAIL_SENT=false" >> $GITHUB_ENV
-        fi
+        echo "=== 邮件通知退出码: $EXIT_CODE ==="
+        
+        case $EXIT_CODE in
+          0)
+            echo "✅ 邮件通知发送成功"
+            echo "EMAIL_SENT=true" >> $GITHUB_ENV
+            ;;
+          1)
+            echo "❌ 错误：配置文件不存在或读取失败"
+            echo "EMAIL_SENT=false" >> $GITHUB_ENV
+            ;;
+          2)
+            echo "⚠️ 跳过：邮件通知未启用"
+            echo "EMAIL_SENT=false" >> $GITHUB_ENV
+            ;;
+          3)
+            echo "⚠️ 跳过：未检测到文件变更或发送失败"
+            echo "EMAIL_SENT=false" >> $GITHUB_ENV
+            ;;
+          *)
+            echo "❌ 未知错误，退出码: $EXIT_CODE"
+            echo "EMAIL_SENT=false" >> $GITHUB_ENV
+            ;;
+        esac
+        
+        echo ""
+        echo "=== 检查监控文件是否存在 ==="
+        for f in file/best_sorted.m3u file/best_sorted.m3u8; do
+          if [ -f "$f" ]; then
+            size=$(wc -c < "$f")
+            echo "✓ $f 存在 (大小: $size 字节)"
+          else
+            echo "✗ $f 不存在"
+          fi
+        done
     - name: Save and commit notify hashes
       run: |
         echo "=== 保存邮件通知哈希记录 ==="
