@@ -174,6 +174,68 @@ detect_python_env() {
     return 0
 }
 
+fix_ffmpeg_issues() {
+    local ffmpeg_path="$1"
+    local fixed=0
+
+    # 1. 检测并修复执行权限
+    if [ -f "$ffmpeg_path" ] && [ ! -x "$ffmpeg_path" ]; then
+        echo "[修复] 添加执行权限: $ffmpeg_path"
+        chmod +x "$ffmpeg_path" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "[✓] 权限已修复"
+            fixed=1
+        else
+            echo "[!] 权限修复失败，尝试使用 sudo..."
+            sudo chmod +x "$ffmpeg_path" 2>/dev/null || true
+        fi
+    fi
+
+    # 2. 检测并修复架构不匹配 (macOS)
+    if [ "$(uname -s)" = "Darwin" ] && [ -x "$ffmpeg_path" ]; then
+        local sys_arch=$(uname -m)
+        local ffmpeg_arch=$(file "$ffmpeg_path" 2>/dev/null | grep -o 'arm64\|x86_64' | head -1)
+
+        if [ -n "$sys_arch" ] && [ -n "$ffmpeg_arch" ] && [ "$sys_arch" != "$ffmpeg_arch" ]; then
+            echo "[警告] 架构不匹配: 系统=$sys_arch, FFmpeg=$ffmpeg_arch"
+
+            # 尝试从嵌套目录找到正确版本
+            local ffmpeg_dir=$(dirname "$ffmpeg_path")
+            local correct_ffmpeg="$ffmpeg_dir/bin/ffmpeg"
+
+            if [ -x "$correct_ffmpeg" ]; then
+                local correct_arch=$(file "$correct_ffmpeg" 2>/dev/null | grep -o 'arm64\|x86_64' | head -1)
+                if [ "$correct_arch" = "$sys_arch" ]; then
+                    echo "[修复] 找到正确架构版本: $correct_ffmpeg ($correct_arch)"
+                    
+                    # 备份错误版本
+                    local backup_name="${ffmpeg_path}_$(date +%Y%m%d_%H%M%S)_wrong_arch"
+                    mv "$ffmpeg_path" "$backup_name" 2>/dev/null
+                    
+                    # 替换为正确版本
+                    cp "$correct_ffmpeg" "$ffmpeg_path"
+                    chmod +x "$ffmpeg_path"
+                    
+                    echo "[✓] 已替换为正确架构版本 ($correct_arch)"
+                    fixed=1
+
+                    # 同样处理 ffprobe
+                    local ffprobe_path="${ffmpeg_path%/*}/ffprobe"
+                    local correct_ffprobe="$ffmpeg_dir/bin/ffprobe"
+                    if [ -f "$correct_ffprobe" ]; then
+                        mv "$ffprobe_path" "${ffprobe_path}_$(date +%Y%m%d_%H%M%S)_wrong_arch" 2>/dev/null
+                        cp "$correct_ffprobe" "$ffprobe_path"
+                        chmod +x "$ffprobe_path"
+                        echo "[✓] ffprobe 也已替换"
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    return $fixed
+}
+
 detect_ffmpeg() {
     echo ""
     echo "========================================"
@@ -183,25 +245,37 @@ detect_ffmpeg() {
     if command -v ffmpeg &> /dev/null; then
         echo "[*] FFmpeg 已安装:"
         ffmpeg -version 2>&1 | head -1
+        
+        # 验证是否能正常工作
+        local test_output=$(ffmpeg -version 2>&1 | head -1)
+        if [ -z "$test_output" ]; then
+            echo "[警告] FFmpeg 存在但无法运行，尝试修复..."
+            fix_ffmpeg_issues "$(which ffmpeg)"
+        fi
         return 0
     fi
 
     # 优先检查项目根目录下的预编译版本
-    if [ -x "$WORK_DIR/ffmpeg/linux/bin/ffmpeg" ] || [ -x "$WORK_DIR/ffmpeg/macos/bin/ffmpeg" ]; then
-        # Linux 或 macOS 预编译版本
-        for platform_dir in "linux" "macos"; do
-            FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
+    for platform_dir in "linux" "macos"; do
+        FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
+        if [ -f "$FFMPEG_PREBUILT/ffmpeg" ]; then
+            
+            # 自动检测和修复问题
+            fix_ffmpeg_issues "$FFMPEG_PREBUILT/ffmpeg"
+            
             if [ -x "$FFMPEG_PREBUILT/ffmpeg" ]; then
-                echo "[*] 使用预编译 FFmpeg: $FFMPEG_PREBUILT"
-                export PATH="$FFMPEG_PREBUILT:$PATH"
-                ffmpeg -version 2>&1 | head -1
-                return 0
+                # 验证 FFmpeg 是否能正常运行
+                if "$FFMPEG_PREBUILT/ffmpeg" -version &> /dev/null; then
+                    echo "[*] 使用预编译 FFmpeg: $FFMPEG_PREBUILT"
+                    export PATH="$FFMPEG_PREBUILT:$PATH"
+                    ffmpeg -version 2>&1 | head -1
+                    return 0
+                else
+                    echo "[!] FFmpeg 文件存在但无法运行"
+                fi
             fi
-        done
-    fi
-
-    # 回退到虚拟环境中的旧版路径
-    fi
+        fi
+    done
 
     echo "未找到 FFmpeg，正在通过跨平台安装工具安装..."
     echo ""
@@ -214,24 +288,35 @@ detect_ffmpeg() {
         return 0
     fi
 
-    # 优先检查预编译版本目录
-    if [ -x "$WORK_DIR/ffmpeg/linux/bin/ffmpeg" ] || [ -x "$WORK_DIR/ffmpeg/macos/bin/ffmpeg" ]; then
-        for platform_dir in "linux" "macos"; do
-            FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
-            if [ -x "$FFMPEG_PREBUILT/ffmpeg" ]; then
+    # 优先检查预编译版本目录（安装后再次检测和修复）
+    for platform_dir in "linux" "macos"; do
+        FFMPEG_PREBUILT="$WORK_DIR/ffmpeg/$platform_dir/bin"
+        if [ -f "$FFMPEG_PREBUILT/ffmpeg" ]; then
+            
+            # 自动检测和修复安装后的 FFmpeg
+            fix_ffmpeg_issues "$FFMPEG_PREBUILT/ffmpeg"
+            
+            if [ -x "$FFMPEG_PREBUILT/ffmpeg" ] && "$FFMPEG_PREBUILT/ffmpeg" -version &> /dev/null; then
                 export PATH="$FFMPEG_PREBUILT:$PATH"
                 echo "[*] FFmpeg 安装成功 (预编译版本):"
                 ffmpeg -version 2>&1 | head -1
                 return 0
             fi
-        done
-    fi
-    
+        fi
+    done
+
     # 回退到 .venv 目录或系统路径
-    if [ -x "$FFMPEG_DIR/bin/ffmpeg" ]; then
-        export PATH="$FFMPEG_DIR/bin:$PATH"
-        echo "[*] FFmpeg 安装成功:"
-        ffmpeg -version 2>&1 | head -1
+    if [ -f "$FFMPEG_DIR/bin/ffmpeg" ]; then
+        fix_ffmpeg_issues "$FFMPEG_DIR/bin/ffmpeg"
+        
+        if [ -x "$FFMPEG_DIR/bin/ffmpeg" ] && "$FFMPEG_DIR/bin/ffmpeg" -version &> /dev/null; then
+            export PATH="$FFMPEG_DIR/bin:$PATH"
+            echo "[*] FFmpeg 安装成功:"
+            ffmpeg -version 2>&1 | head -1
+        else
+            echo "[警告] FFmpeg 安装可能失败，浏览器中 AC3/EAC3 音频将无声音"
+            echo "   可手动安装 FFmpeg: https://ffmpeg.org/download.html"
+        fi
     elif command -v ffmpeg &> /dev/null; then
         echo "[*] FFmpeg 安装成功:"
         ffmpeg -version 2>&1 | head -1
@@ -430,8 +515,7 @@ setup_scheduled_task_and_web() {
 
     echo "[5/5] 注册定时任务..."
 
-    WORK_DIR="$(cd "$(dirname "$0")" && pwd)"
-    SCRIPT_PATH="$WORK_DIR/$(basename "$0")"
+    SCRIPT_PATH="$WORK_DIR/script/$(basename "$0")"
     CRON_CMD="0 */4 * * * cd $WORK_DIR && $SCRIPT_PATH --collect >> $WORK_DIR/iptv_cron.log 2>&1"
 
     EXISTING_CRON=$(crontab -l 2>/dev/null | grep -F "iptv_tool.sh --collect")

@@ -185,6 +185,34 @@ cmd = [
 - sh：`$PYTHON_CMD "$WORK_DIR/script/notify.py" --once`
 - 工作目录：bat用 `cd /d "%~dp0.."`，sh用 `cd "$WORK_DIR"`
 
+#### FFmpeg 自动修复 (iptv_tool.sh)
+
+**函数**: `fix_ffmpeg_issues(ffmpeg_path)`
+
+**自动检测和修复的问题**:
+1. **执行权限缺失**: 检测到无 `-x` 权限时自动 `chmod +x`
+2. **架构不匹配 (macOS)**: 
+   - 使用 `uname -m` 获取系统架构
+   - 使用 `file` 命令检测 FFmpeg 架构
+   - 不匹配时从嵌套目录 `bin/bin/ffmpeg` 查找正确版本
+   - 自动备份错误版本（带时间戳）
+   - 同时处理 ffprobe
+3. **安装后验证**: 安装完成后验证 FFmpeg 是否能正常运行
+
+**调用时机**:
+- `detect_ffmpeg()` 函数中每次检测 FFmpeg 时
+- 系统 PATH 中的 FFmpeg
+- 项目预编译版本 (`ffmpeg/{platform}/bin/ffmpeg`)
+- .venv 目录中的 FFmpeg
+- 安装后的新版本
+
+**架构映射表**:
+| 系统 | 正确路径 | 备选路径 |
+|------|---------|---------|
+| macOS ARM | `ffmpeg/macos/bin/ffmpeg` (arm64) | `ffmpeg/macos/bin/bin/ffmpeg` |
+| macOS Intel | `ffmpeg/macos/bin/ffmpeg` (x86_64) | - |
+| Linux x64 | `ffmpeg/linux/bin/ffmpeg` (x86_64) | - |
+
 ### Python风格
 
 - 编码：始终指定 `encoding='utf-8'`

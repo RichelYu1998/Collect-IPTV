@@ -541,6 +541,33 @@ Made with ❤️ by Collect-IPTV Team
 
 ## 📜 完整更新历史
 
+### v2.11.0 (2026-07-01) - 脚本健壮性增强 & FFmpeg自动修复 & 配置修正
+
+#### ✨ 新功能
+- ✅ **FFmpeg 自动检测和修复**：智能识别并修复权限问题、架构不匹配、嵌套目录结构
+- ✅ **架构自适应**：macOS 下自动检测 arm64/x86_64 并选择正确版本
+- ✅ **权限自动修复**：检测到无执行权限时自动添加 chmod +x
+- ✅ **嵌套目录处理**：自动从 bin/bin/ 目录找到正确架构的 FFmpeg
+- ✅ **安装后验证**：FFmpeg 安装后自动验证是否可正常运行
+
+#### 🔧 Bug修复
+- ✅ **修复脚本语法错误**：iptv_tool.sh 第204行多余 `fi` 导致无法启动
+- ✅ **修复路径配置错误**：notify.json 中 watch_files 缺少 file/ 前缀导致监控失效
+- ✅ **修复 WORK_DIR 变量覆盖**：setup_scheduled_task_and_web() 中错误重新定义 WORK_DIR 导致 server.py 找不到
+- ✅ **修复 FFmpeg 架构不匹配**：Apple Silicon Mac 使用 x86_64 版本导致转码失败和无声音
+
+#### 📝 配置变更
+- 📄 notify.json: watch_files 路径修正为 `file/best_sorted.m3u` 和 `file/best_sorted.m3u8`
+- 📄 iptv_tool.sh: 新增 fix_ffmpeg_issues() 自动修复函数
+- 📄 server.py: 无变更（FFmpeg 修复在脚本层实现）
+
+#### 💡 使用体验提升
+- ⚡ 首次运行或 FFmpeg 异常时自动诊断和修复，无需手动干预
+- ⚡ 支持 macOS Apple Silicon (M1/M2/M3) 和 Intel 双架构自动切换
+- ⚡ 错误版本自动备份（带时间戳），保留历史记录便于排查
+
+---
+
 ### v2.10.0 (2026-07-01) - 播放器架构重构 & 性能优化 & 音频探测加速
 
 #### ✨ 新功能
