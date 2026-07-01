@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import os
 import sys
 import json
@@ -129,41 +129,13 @@ def send_email(config, changes):
     body_lines.append('请及时查看更新后的直播源文件。')
     body = '\n'.join(body_lines)
 
-    html_rows = ''
-    for c in changes:
-        tag = '🆕 新增' if c['type'] == 'new' else '🔄 变更'
-        color = '#28a745' if c['type'] == 'new' else '#fd7e14'
-        html_rows += f'<tr><td style="color:{color};font-weight:bold;">{tag}</td><td>{c["file"]}</td><td>{c["detail"]}</td></tr>'
-
-    html_body = f"""
-<html>
-<body>
-<h2 style="color:#333;">IPTV直播源文件变更通知</h2>
-<table style="border-collapse:collapse;width:100%;max-width:600px;">
-<tr style="background:#f5f5f5;"><th style="padding:8px;border:1px solid #ddd;">类型</th><th style="padding:8px;border:1px solid #ddd;">文件</th><th style="padding:8px;border:1px solid #ddd;">详情</th></tr>
-{html_rows}
-</table>
-<p style="color:#666;margin-top:16px;">检测时间: {current_time}</p>
-<p style="color:#999;">此邮件由 IPTV 直播源采集工具自动发送</p>
-</body>
-</html>
-"""
-
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
-    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
     try:
-        print(f'[通知] 正在连接 SMTP 服务器: {smtp_host}:{smtp_port}')
-        if smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
-        else:
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
-            server.starttls()
-
-        print('[通知] 正在登录 SMTP 服务器...')
-        server.login(smtp_user, smtp_password)
-
         print('[通知] 正在发送邮件...')
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
 
@@ -183,24 +155,17 @@ def send_email(config, changes):
         return False
 
 
-def main():
-    config = load_config()
-    if not config:
-        return
-
-    if not config.get('email_notification_enabled', False):
-        print('[通知] 邮件通知未启用，跳过')
-        return
-
+def check_and_notify(config):
+    """检测变更并发送邮件"""
     changes = detect_changes(config)
+    
     if not changes:
-        print('[通知] 未检测到文件变更')
-        return
-
+        return False
+    
     print(f'[通知] 检测到 {len(changes)} 个文件变更:')
     for c in changes:
         print(f'    [{c["type"]}] {c["file"]} - {c["detail"]}')
-
+    
     cooldown = int(config.get('email_cooldown_seconds', 300))
     hash_data = load_hashes()
     last_sent = hash_data.get('_last_email_sent', 0)
@@ -209,14 +174,16 @@ def main():
     if now - last_sent < cooldown:
         remaining = int(cooldown - (now - last_sent))
         print(f'[通知] 邮件冷却中，剩余 {remaining} 秒')
-        return
-
+        return False
+    
     success = send_email(config, changes)
 
     if success:
         hash_data = load_hashes()
         hash_data['_last_email_sent'] = now
+        hash_data['_email_fail_count'] = 0
         save_hashes(hash_data)
+        return True
     else:
         hash_data = load_hashes()
         fail_count = hash_data.get('_email_fail_count', 0) + 1
@@ -231,6 +198,44 @@ def main():
             hash_data['_email_fail_count'] = fail_count
 
         save_hashes(hash_data)
+        return False
+
+
+def main():
+    """主函数：持续监控文件变更"""
+    config = load_config()
+    if not config:
+        return
+
+    if not config.get('email_notification_enabled', False):
+        print('[通知] 邮件通知未启用，跳过')
+        return
+    
+    # 监控间隔（秒），默认60秒检查一次
+    interval = int(config.get('watch_interval_seconds', 60))
+    
+    print('=' * 60)
+    print('IPTV 直播源文件监控服务')
+    print('=' * 60)
+    print(f'[通知] 监控文件: {config.get("watch_files", [])}')
+    print(f'[通知] 检查间隔: {interval} 秒')
+    print(f'[通知] 邮件冷却: {config.get("email_cooldown_seconds", 300)} 秒')
+    print(f'[通知] 接收邮箱: {config.get("email_to", "未设置")}')
+    print('=' * 60)
+    print('[通知] 开始监控... (按 Ctrl+C 停止)')
+    print('')
+    
+    # 首次运行时立即检测一次
+    print('[通知] 执行首次检测...')
+    check_and_notify(config)
+    
+    # 持续监控循环
+    try:
+        while True:
+            time.sleep(interval)
+            check_and_notify(config)
+    except KeyboardInterrupt:
+        print('\n[通知] 监控已停止')
 
 
 if __name__ == '__main__':
