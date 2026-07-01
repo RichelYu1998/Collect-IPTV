@@ -34,36 +34,24 @@ jobs:
       
     - name: Setup email notification config
       env:
-        SMTP_HOST: ${{ secrets.SMTP_HOST }}
-        SMTP_PORT: ${{ secrets.SMTP_PORT }}
-        SMTP_USER: ${{ secrets.SMTP_USER }}
-        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         EMAIL_TO: ${{ secrets.EMAIL_TO }}
       run: |
-        echo "=== 配置邮件通知 ==="
+        echo "=== 配置邮件通知（Resend API） ==="
         mkdir -p config
         
         python3 << 'PYEOF'
         import json
         import os
         
-        smtp_host = os.environ.get('SMTP_HOST', 'smtp.qq.com')
-        smtp_port_str = os.environ.get('SMTP_PORT', '587')
-        smtp_user = os.environ.get('SMTP_USER', '')
-        smtp_password = os.environ.get('SMTP_PASSWORD', '')
+        resend_api_key = os.environ.get('RESEND_API_KEY', '')
         email_to = os.environ.get('EMAIL_TO', '')
         
-        try:
-            smtp_port = int(smtp_port_str)
-        except ValueError:
-            smtp_port = 587
-        
         config = {
+            "email_provider": "resend",
             "email_notification_enabled": True,
-            "email_smtp_host": smtp_host,
-            "email_smtp_port": smtp_port,
-            "email_smtp_user": smtp_user,
-            "email_smtp_password": smtp_password,
+            "resend_api_key": resend_api_key,
+            "resend_from_email": "onboarding@resend.dev",
             "email_from_name": "IPTV直播源监控",
             "email_to": email_to,
             "watch_files": [
@@ -78,10 +66,9 @@ jobs:
         with open('config/notify.json', 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         
-        print("✅ 邮件配置文件已创建")
-        print(f"SMTP Host: {smtp_host}")
-        print(f"SMTP Port: {smtp_port}")
-        print(f"SMTP User: {smtp_user}")
+        print("✅ 邮件配置文件已创建 (Resend API 模式)")
+        print(f"Email Provider: resend")
+        print(f"API Key: {resend_api_key[:10]}...{resend_api_key[-4:] if len(resend_api_key) > 14 else '***'}")
         print(f"Email To: {email_to}")
         PYEOF
         

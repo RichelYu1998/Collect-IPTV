@@ -104,6 +104,111 @@ def detect_changes(config):
 
 
 def send_email(config, changes):
+    email_provider = config.get('email_provider', 'smtp').lower()
+    
+    if email_provider == 'resend':
+        return send_email_resend(config, changes)
+    else:
+        return send_email_smtp(config, changes)
+
+
+def send_email_resend(config, changes):
+    import urllib.request
+    import urllib.error
+    import json as json_module
+    
+    api_key = config.get('resend_api_key', '')
+    from_email = config.get('resend_from_email', 'onboarding@resend.dev')
+    to_email = config.get('email_to', '')
+    from_name = config.get('email_from_name', 'IPTV直播源监控')
+    
+    if not api_key or not to_email:
+        print('[通知] Resend 配置不完整（需要 resend_api_key 和 email_to），跳过发送')
+        return False
+    
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    change_count = len(changes)
+    
+    # 构建邮件正文
+    body_lines = [f'IPTV直播源文件变更通知', '', f'时间: {current_time}', '']
+    for c in changes:
+        tag = '新增' if c['type'] == 'new' else '变更'
+        body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
+    
+    attachment_files = []
+    for c in changes:
+        filepath = c.get('filepath', '')
+        if filepath and os.path.exists(filepath):
+            attachment_files.append(filepath)
+    
+    body_lines.append('')
+    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    for fpath in attachment_files:
+        fname = os.path.basename(fpath)
+        body_lines.append(f'  - {fname}')
+    
+    body_lines.append('')
+    body_lines.append('请查收附件中的最新直播源文件。')
+    body_text = '\n'.join(body_lines)
+    
+    # 准备附件
+    attachments = []
+    for filepath in attachment_files:
+        try:
+            with open(filepath, 'rb') as f:
+                file_content = base64.b64encode(f.read()).decode('utf-8')
+                filename = os.path.basename(filepath)
+                attachments.append({
+                    'filename': filename,
+                    'content': file_content
+                })
+                print(f'[通知] 已准备附件: {filename}')
+        except Exception as e:
+            print(f'[通知] 读取附件失败 {filepath}: {e}')
+    
+    # 构建 API 请求
+    payload = {
+        'from': f'{from_name} <{from_email}>',
+        'to': [to_email],
+        'subject': f'[IPTV直播源监控] 检测到{change_count}个文件变化 - {current_time}',
+        'html': f'<pre>{body_text}</pre>',
+        'attachments': attachments
+    }
+    
+    try:
+        print('[通知] 正在通过 Resend API 发送邮件...')
+        
+        data = json_module.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=data,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            },
+            method='POST'
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json_module.loads(response.read().decode('utf-8'))
+            
+        print(f'[通知] ✓ 邮件已成功发送至 {to_email} (Resend API)')
+        print(f'[通知] Message ID: {result.get("id", "N/A")}')
+        return True
+        
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else ''
+        print(f'[通知] Resend API HTTP 错误 {e.code}: {error_body}')
+        return False
+    except urllib.error.URLError as e:
+        print(f'[通知] Resend API 网络错误: {e.reason}')
+        return False
+    except Exception as e:
+        print(f'[通知] Resend API 发送失败: {e}')
+        return False
+
+
+def send_email_smtp(config, changes):
     smtp_host = config.get('email_smtp_host', 'smtp.qq.com')
     smtp_port = int(config.get('email_smtp_port', 587))
     smtp_user = config.get('email_smtp_user', '')
@@ -112,7 +217,7 @@ def send_email(config, changes):
     to_email = config.get('email_to', '')
 
     if not smtp_user or not smtp_password or not to_email:
-        print('[通知] 邮件配置不完整，跳过发送')
+        print('[通知] SMTP 配置不完整，跳过发送')
         return False
 
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
