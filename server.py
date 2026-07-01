@@ -74,7 +74,7 @@ def get_ffmpeg_platform_dir():
         prebuilt_dir = PROJECT_ROOT / 'ffmpeg' / platform_dir / 'bin'
         
         if prebuilt_dir.exists():
-            print(f"[*] 使用预编译 FFmpeg: {prebuilt_dir}")
+            print(f"[*] 使用预编译 FFmpeg: {prebuilt_dir.resolve()}")
             return prebuilt_dir.resolve()  # 规范化路径
         
         # 回退到 .venv 目录（兼容旧版或自动安装）
@@ -703,7 +703,7 @@ def find_ffmpeg():
     try:
         prebuilt_ffmpeg = get_ffmpeg_platform_dir() / f'ffmpeg{ext}'
         if prebuilt_ffmpeg.exists():
-            print(f"[*] 找到预编译 FFmpeg: {prebuilt_ffmpeg}")
+            print(f"[*] 找到预编译 FFmpeg: {prebuilt_ffmpeg.resolve()}")
             return str(prebuilt_ffmpeg.resolve())  # 规范化路径，消除 ..
     except Exception as e:
         print(f"[!] 检测预编译 FFmpeg 失败: {e}")
@@ -1513,7 +1513,7 @@ def main():
     atexit.register(cleanup_all_transcodes)
 
     port = int(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else PORT
-    serve_dir = str(PROJECT_ROOT / '.github' / 'workflows')
+    serve_dir = str((PROJECT_ROOT / "output").resolve())  # 输出目录
     handler = functools.partial(CORSProxyHandler, directory=serve_dir)
 
     with ThreadedHTTPServer(('', port), handler) as httpd:
