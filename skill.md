@@ -346,3 +346,89 @@ cp ffmpeg-new ffmpeg/<platform>/bin/ffmpeg
 
 **最后更新**: 2026-07-01  
 **维护者**: Auto-generated  
+
+---
+
+## FFmpeg 路径规范化修复记录
+
+**修复时间**: 2026-07-01
+
+### 问题清单
+
+1. **路径包含 .. 段**
+   - 现象: D:\\ws\\Collect-IPTV\\script\\..\\ffmpeg\\windows\\bin
+   - 原因: Path 对象未调用 .resolve() 方法
+
+2. **使用错误的 FFmpeg 目录**
+   - 现象: 使用 .venv/ffmpeg/bin 而非预编译版本
+   - 原因: find_ffmpeg() 函数硬编码 .venv 路径
+
+3. **Serving 目录错误**
+   - 现象: Serving: .github/workflows (应该是 output)
+   - 原因: main() 函数硬编码错误路径
+
+### 解决方案
+
+#### 核心改动 (7次提交)
+
+| 提交 | 修复内容 |
+|------|---------|
+| 0285352 | 消除所有 .. 和错误路径 |
+| 3fbaf83 | 规范化 FFmpeg 返回值路径 |
+| 80838d5 | 修正 find_ffmpeg() 优先级 |
+| 9ad3e91 | 修正 bat/sh 启动脚本 |
+| 25325dc | 新增 get_ffmpeg_platform_dir() |
+
+#### 关键函数: get_ffmpeg_platform_dir()
+
+位置: server.py 第59-90行
+
+功能:
+- 根据操作系统动态选择 FFmpeg 目录
+- Windows -> ffmpeg/windows/bin/
+- Linux -> ffmpeg/linux/bin/
+- macOS -> ffmpeg/macos/bin/ (注意目录名是 macos)
+- 所有返回值都调用 .resolve() 规范化路径
+
+#### 关键技术点
+
+1. **Path.resolve() 方法**
+   - 消除路径中的 .. 和 .
+   - 将相对路径转为绝对路径
+   - 返回规范化的干净路径
+
+2. **三层优先级机制**
+   - 预编译版本 (最优先)
+   - .venv 版本 (兼容旧版)
+   - 系统 PATH (最后手段)
+
+3. **平台映射表**
+   - Windows: os='windows', dir='windows/', ext='.exe'
+   - Linux: os='linux', dir='linux/', ext=''
+   - macOS: os='mac', dir='macos/', ext=''
+
+### 效果验证
+
+修改前:
+`
+[*] 使用预编译 FFmpeg: D:\\ws\\Collect-IPTV\\script\\..\\ffmpeg\\windows\\bin  ❌
+Serving: D:\\ws\\Collect-IPTV\\script\\..\\.github\\workflows                    ❌
+`
+
+修改后:
+`
+[*] 使用预编译 FFmpeg: D:\\ws\\Collect-IPTV\\ffmpeg\\windows\\bin              ✅
+Serving: D:\\ws\\Collect-IPTV\\output                                           ✅
+`
+
+### Git 提交统计
+
+- 总提交: 7 次
+- 修改文件: server.py, iptv_tool.bat, iptv_tool.sh, README.md, skill.md
+- 新增代码: ~150 行
+- 删除代码: ~20 行
+
+---
+
+**最后更新**: 2026-07-01
+**版本**: v0.0.0 (FFmpeg 路径规范化完成)

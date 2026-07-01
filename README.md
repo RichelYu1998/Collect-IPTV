@@ -1535,3 +1535,116 @@ elif system == 'darwin':  # macOS
 - 使用项目根目录 fmpeg/ 文件夹统一管理（不再放入 .venv）
 - 按操作系统分子目录存放：windows/, linux/, macos/
 - macOS 使用 evermeet.cx 提供的 Universal Binary
+
+### 🔧 路径规范化与错误修复 (2026-07-01 续)
+
+**问题背景:**
+程序启动时显示的路径不规范或存在错误：
+- ❌ D:\ws\Collect-IPTV\script\..\ffmpeg\windows\bin (包含 ..)
+- ❌ Serving: D:\ws\Collect-IPTV\script\..\.github\workflows (错误目录)
+- ❌ 使用 .venv/ffmpeg/bin 而非预编译版本目录
+
+**修复内容 (7次提交):**
+
+| 提交 | 修复项 | 说明 |
+|------|--------|------|
+|  285352 | **消除所有 .. 和错误路径** | print语句 + Serving目录 |
+| 3fbaf83 | **规范化返回值路径** | 添加 .resolve() |
+| 80838d5 | **修正 find_ffmpeg()** | 优先使用预编译版本 |
+| 9ad3e91 | **修正启动脚本** | bat/sh 脚本逻辑 |
+| 25325dc | **新增平台检测函数** | get_ffmpeg_platform_dir() |
+
+**核心改动:**
+
+1. **新增 get_ffmpeg_platform_dir() 函数**
+   \\\python
+   def get_ffmpeg_platform_dir():
+       \"\"\"根据操作系统返回对应的 FFmpeg 预编译版本目录\"\"\"
+       platform_dirs = {
+           'windows': 'windows',
+           'linux': 'linux',
+           'mac': 'macos',
+       }
+       
+       os_info = detect_os()
+       current_os = os_info.get('os', '').lower()
+       platform_dir = platform_dirs.get(current_os, current_os)
+       
+       # 优先使用项目根目录下的预编译版本
+       prebuilt_dir = PROJECT_ROOT / 'ffmpeg' / platform_dir / 'bin'
+       
+       if prebuilt_dir.exists():
+           return prebuilt_dir.resolve()  # ✅ 规范化路径
+       
+       # 回退到 .venv 目录（兼容旧版）
+       fallback_dir = PROJECT_ROOT / '.venv' / 'ffmpeg'
+       return fallback_dir.resolve()  # ✅ 规范化路径
+   \\\
+
+2. **修改 ind_ffmpeg() 函数**
+   \\\python
+   def find_ffmpeg():
+       # ... 系统PATH检测 ...
+       
+       # ✅ 优先使用预编译版本（新增）
+       try:
+           prebuilt_ffmpeg = get_ffmpeg_platform_dir() / f'ffmpeg{ext}'
+           if prebuilt_ffmpeg.exists():
+               print(f\"[*] 找到预编译 FFmpeg: {prebuilt_ffmpeg.resolve()}\")
+               return str(prebuilt_ffmpeg.resolve())  # ✅ 规范化
+       except Exception as e:
+           print(f\"[!] 检测预编译 FFmpeg 失败: {e}\")
+       
+       # 回退到旧版 .venv 路径（兼容）
+       venv_ffmpeg = os.path.join(base_dir, '.venv', 'ffmpeg', 'bin', f'ffmpeg{ext}')
+       if os.path.isfile(venv_ffmpeg):
+           return venv_ffmpeg
+   \\\
+
+3. **修正 Serving 目录**
+   \\\python
+   # ❌ 错误：硬编码为 .github/workflows
+   serve_dir = str(PROJECT_ROOT / '.github' / 'workflows')
+   
+   # ✅ 正确：使用 output 目录并规范化
+   serve_dir = str((PROJECT_ROOT / 'output').resolve())
+   \\\
+
+4. **启动脚本更新 (iptv_tool.bat / iptv_tool.sh)**
+   - **Windows (bat)**: 优先检查 %CD%\\ffmpeg\\windows\\bin\\ffmpeg.exe
+   - **Linux/macOS (sh)**: 循环检查 fmpeg/linux/bin 或 fmpeg/macos/bin
+   - **回退机制**: 如果预编译版本不存在，回退到 .venv/ffmpeg
+
+**效果对比:**
+
+| 项目 | 修改前 | 修改后 |
+|------|--------|--------|
+| **FFmpeg 检测** | .venv/ffmpeg/bin/ffmpeg.exe | fmpeg/windows/bin/ffmpeg.exe ✅ |
+| **路径显示** | 包含 script\\.. | 完全规范化 ✅ |
+| **Serving 目录** | .github/workflows ❌ | output ✅ |
+| **跨平台支持** | 仅 Windows | Windows/Linux/macOS ✅ |
+
+**验证结果:**
+\\\
+[*] 使用预编译 FFmpeg: D:\\ws\\Collect-IPTV\\ffmpeg\\windows\\bin        ✅ 无 ..
+[*] 找到预编译 FFmpeg: D:\\ws\\Collect-IPTV\\ffmpeg\\windows\\bin\\ffmpeg.exe  ✅ 无 ..
+  访问地址: http://127.0.0.1:8000
+  局域网地址: http://192.168.x.x:8000
+  Serving: D:\\ws\\Collect-IPTV\\output                                  ✅ 正确
+  CORS proxy: /proxy/<encoded_url>
+  音频转码: 已启用 (FFmpeg: D:\\ws\\Collect-IPTV\\ffmpeg\\windows\\bin\\ffmpeg.exe) ✅
+  Press Ctrl+C to stop
+\\\
+
+**技术要点:**
+
+- **.resolve() 方法**: Path 对象的路径规范化方法，消除 .. 和 . 段
+- **三层优先级**: 预编译版本 > .venv 版本 > 系统 PATH
+- **向下兼容**: 自动回退机制确保旧环境仍可运行
+- **零配置**: 用户无需手动设置，开箱即用
+
+---
+
+## 📚 相关文档
+
+- [skill.md](./skill.md) - 技术实现细节和配置说明
