@@ -12,7 +12,12 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.header import Header
 from email import encoders
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_CST = timezone(timedelta(hours=8))
+
+def _now_cst():
+    return datetime.now(_CST)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 CONFIG_DIR = PROJECT_ROOT / 'config'
@@ -128,7 +133,7 @@ def send_email_sendgrid(config, changes):
         print('[通知] SendGrid 配置不完整（需要 sendgrid_api_key 和 email_to），跳过发送')
         return False
     
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = _now_cst().strftime('%Y-%m-%d %H:%M:%S')
     change_count = len(changes)
     
     # 构建邮件正文
@@ -242,7 +247,7 @@ def send_email_resend(config, changes):
         print('[通知] Resend 配置不完整（需要 resend_api_key 和 email_to），跳过发送')
         return False
     
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = _now_cst().strftime('%Y-%m-%d %H:%M:%S')
     change_count = len(changes)
     
     # 构建邮件正文
@@ -336,7 +341,7 @@ def send_email_smtp(config, changes):
         print('[通知] SMTP 配置不完整，跳过发送')
         return False
 
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_time = _now_cst().strftime('%Y-%m-%d %H:%M:%S')
     change_count = len(changes)
 
     msg = MIMEMultipart('mixed')
