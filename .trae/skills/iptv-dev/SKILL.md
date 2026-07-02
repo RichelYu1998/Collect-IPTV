@@ -179,6 +179,39 @@ cmd = [
 - 配置：`config/notify.json`
 - GitHub Actions：workflow 中自动调用，哈希记录提交到仓库
 
+#### 多邮件提供商支持
+
+通过 `email_provider` 字段选择发送方式：
+
+| 提供商 | 配置值 | 适用场景 | 关键配置字段 |
+|--------|--------|---------|-------------|
+| SMTP | `smtp`（默认） | 本地运行 | `email_smtp_host`, `email_smtp_port`, `email_smtp_user`, `email_smtp_password` |
+| SendGrid | `sendgrid` | GitHub Actions | `sendgrid_api_key`, `sendgrid_from_email` |
+| Resend | `resend` | GitHub Actions 备选 | `resend_api_key`, `resend_from_email` |
+
+**发送函数路由**：
+```python
+def send_email(config, changes):
+    email_provider = config.get('email_provider', 'smtp').lower()
+    if email_provider == 'sendgrid':
+        return send_email_sendgrid(config, changes)
+    elif email_provider == 'resend':
+        return send_email_resend(config, changes)
+    else:
+        return send_email_smtp(config, changes)
+```
+
+**SMTP_SSL 支持**：
+- 端口 465 → `smtplib.SMTP_SSL(host, port, timeout=30)`
+- 端口 587 → `smtplib.SMTP(host, port, timeout=30)` + `starttls()`
+
+**时区**：`_CST = timezone(timedelta(hours=8))`，邮件时间戳使用 UTC+8
+
+**GitHub Actions 配置注入**：
+- Workflow 通过 Secrets 环境变量注入 SMTP 凭证
+- 运行时 Python 脚本自动生成 `config/notify.json`
+- Secret 名称：`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_TO`
+
 ### GitHub Actions 工作流 (.github/workflows/iptv.yml)
 
 **核心功能**：
@@ -198,20 +231,21 @@ env:
 ```
 
 **工作流步骤**：
-1. **Checkout repository**: `fetch-depth: 0` + token 用于后续推送
+1. **Checkout repository**: `ref: main`
 2. **Set up Python**: Python 3.10
 3. **Install dependencies**: aiohttp
-4. **Run scraping script**: 执行 iptv.py 采集 IPTV 源
-5. **GetTime**: 获取当前时间戳
-6. **Update README.md**: sed 替换时间和链接占位符
-7. **Commit and push changes**:
+4. **Setup email notification config**: 通过 Secrets 环境变量注入 SMTP 凭证，运行时生成 `config/notify.json`
+5. **Run scraping script**: 执行 iptv.py 采集 IPTV 源
+6. **GetTime**: 获取当前时间戳
+7. **Update README.md**: sed 替换时间和链接占位符
+8. **Commit and push changes**:
    - 文件存在性检查
    - `git add -f file/best_sorted.m3u` 强制添加（绕过 .gitignore）
    - `git add -f file/best_sorted.m3u8` 强制添加
    - 动态分支引用 `${{ github.ref }}`
    - 无变更时跳过提交
-8. **Send email notification**: `python script/notify.py --once`
-9. **Save and commit notify hashes**: 保存并推送 `.notify_hashes.json`
+9. **Send email notification**: `python script/notify.py --once`
+10. **Save and commit notify hashes**: 保存并推送 `.notify_hashes.json`
 
 **已解决的技术问题**：
 
@@ -224,6 +258,9 @@ env:
 | **403 权限错误** | **`permissions: contents: write`** | **3b793ad** |
 | **运行速度慢** | **IPTV_TIMEOUT=3 + MAX_PARALLEL=200** | **62eca5b** |
 | **邮件通知缺失** | **添加 notify 步骤 + 哈希持久化** | **70a7796, ed522a5** |
+| **SMTP 端口封锁** | **SMTP_SSL (465) + SendGrid/Resend API** | **278fe77, b2f8c52, 121afd6** |
+| **邮件时区错误** | **UTC+8 (CST) 时区修正** | **ebb20e3** |
+| **凭证安全** | **GitHub Secrets 环境变量注入** | **2bab146** |
 
 **性能优化对比**：
 ```
@@ -297,4 +334,5 @@ env:
 - 缓存文件：`file/.cdn_cache.json`、`file/.stream_cache.json`、`file/.source_cache.json`
 - 邮件哈希记录：`config/.notify_hashes.json`（Git 跟踪，用于持久化）
 - GitHub Actions 配置：`.github/workflows/iptv.yml`
-- 邮件配置：`config/notify.json`（含 SMTP 凭证，不提交到 Git）
+- 邮件配置：`config/notify.json`（含 SMTP/API 凭证，不提交到 Git）
+- GitHub Secrets：`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_TO`（运行时注入）

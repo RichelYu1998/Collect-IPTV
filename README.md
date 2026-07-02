@@ -178,24 +178,69 @@ export IPTV_MAX_PARALLEL=300
 
 ### 功能概述
 
-当 `best_sorted.m3u` 或 `best_sorted.m3u8` 文件发生变化时，系统会自动发送邮件通知，并将这两个文件作为附件一同发送。
+当 `best_sorted.m3u` 或 `best_sorted.m3u8` 文件发生变化时，系统会自动发送邮件通知，并将这两个文件作为附件一同发送。支持三种邮件发送方式：**SMTP**、**SendGrid API**、**Resend API**。
 
 ### 配置方法
 
-编辑 `config/notify.json`：
+编辑 `config/notify.json`，根据 `email_provider` 字段选择发送方式：
+
+#### 方式1: SMTP（默认，本地运行推荐）
 
 ```json
 {
+  "email_provider": "smtp",
   "email_notification_enabled": true,
-  "smtp_server": "smtp.qq.com",
-  "smtp_port": 465,
-  "sender_email": "your@qq.com",
-  "auth_code": "your_auth_code",
-  "receiver_email": "recipient@example.com",
-  "use_ssl": true,
+  "email_smtp_host": "smtp.qq.com",
+  "email_smtp_port": 465,
+  "email_smtp_user": "your@qq.com",
+  "email_smtp_password": "your_auth_code",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
+
+#### 方式2: SendGrid API（GitHub Actions 推荐，无域名验证限制）
+
+```json
+{
+  "email_provider": "sendgrid",
+  "email_notification_enabled": true,
+  "sendgrid_api_key": "SG.xxxxx",
+  "sendgrid_from_email": "noreply@yourdomain.com",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
+}
+```
+
+#### 方式3: Resend API（GitHub Actions 备选，免费额度）
+
+```json
+{
+  "email_provider": "resend",
+  "email_notification_enabled": true,
+  "resend_api_key": "re_xxxxx",
+  "resend_from_email": "onboarding@resend.dev",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
+}
+```
+
+### GitHub Actions 邮件配置
+
+GitHub Actions 通过 Secrets 环境变量注入 SMTP 配置，无需提交凭证到仓库：
+
+| Secret 名称 | 说明 | 示例 |
+|-------------|------|------|
+| `SMTP_HOST` | SMTP 服务器地址 | `smtp.qq.com` |
+| `SMTP_PORT` | SMTP 端口 | `465` |
+| `SMTP_USER` | 发件邮箱账号 | `your@qq.com` |
+| `SMTP_PASSWORD` | 授权码/密码 | `elracegpxeyabceb` |
+| `EMAIL_TO` | 收件邮箱 | `recipient@example.com` |
+
+Workflow 会自动在运行时生成 `config/notify.json`，使用 SMTP 方式发送。
 
 ### 发送策略
 
@@ -206,7 +251,18 @@ export IPTV_MAX_PARALLEL=300
 | **无变化** | 不发送邮件 |
 | **发送失败** | 不重试，等待下次检测 |
 
-### 支持的邮箱服务商
+### 邮件提供商对比
+
+| 特性 | SMTP | SendGrid API | Resend API |
+|------|------|-------------|------------|
+| **适用场景** | 本地运行 | GitHub Actions | GitHub Actions |
+| **端口限制** | 可能被封（587/465） | 无（HTTPS 443） | 无（HTTPS 443） |
+| **域名验证** | 不需要 | 不需要 | 需要（免费额度） |
+| **免费额度** | 取决于邮箱服务商 | 100封/天 | 100封/天 |
+| **附件支持** | ✅ | ✅ | ✅ |
+| **配置复杂度** | 低 | 低 | 中 |
+
+### 支持的 SMTP 邮箱服务商
 
 | 服务商 | SMTP服务器 | 端口 | 加密方式 |
 |--------|-----------|------|---------|
@@ -215,7 +271,7 @@ export IPTV_MAX_PARALLEL=300
 | Gmail | smtp.gmail.com | 587 | STARTTLS |
 | Outlook | smtp.office365.com | 587 | STARTTLS |
 
-> 💡 **提示**: 请使用授权码而非登录密码，在邮箱设置的SMTP选项中获取。
+> 💡 **提示**: 请使用授权码而非登录密码，在邮箱设置的SMTP选项中获取。端口 465 使用 SSL 直连，端口 587 使用 STARTTLS 升级加密。
 
 ---
 
@@ -434,10 +490,12 @@ best_sorted.m3u/m3u8
 - 定时任务管理
 
 #### notify.py - 邮件通知
-- 文件变更检测
-- MD5哈希对比
-- SMTP邮件发送
-- 附件自动添加
+- 文件变更检测（MD5哈希对比）
+- 三种发送方式：SMTP / SendGrid API / Resend API
+- SMTP_SSL (端口465) 和 STARTTLS (端口587) 双模式
+- 附件自动添加（M3U/M3U8文件）
+- 时区修正为 UTC+8 (CST)
+- GitHub Actions 通过 Secrets 环境变量注入配置
 
 ---
 
@@ -540,6 +598,36 @@ Made with ❤️ by Collect-IPTV Team
 ---
 
 ## 📜 完整更新历史
+
+### v2.13.0 (2026-07-02) - 多邮件提供商支持 & SMTP_SSL & 时区修复
+
+#### ✨ 新功能
+- ✅ **SendGrid API 邮件发送**：通过 HTTPS API 发送邮件，绕过 GitHub Actions SMTP 端口封锁，无域名验证限制
+- ✅ **Resend API 邮件发送**：备选 HTTPS API 方式，免费额度 100 封/天，适合轻量使用
+- ✅ **多提供商架构**：`email_provider` 字段切换发送方式（smtp / sendgrid / resend），统一接口
+- ✅ **SMTP_SSL 支持**：端口 465 使用 `smtplib.SMTP_SSL` 直连，解决 GitHub Actions SMTP 连接问题
+- ✅ **GitHub Actions 邮件配置自动化**：通过 Secrets 环境变量注入 SMTP 凭证，运行时自动生成 `notify.json`
+
+#### 🔧 Bug修复
+- ✅ **修复邮件通知时区**：时间戳从 UTC 改为 UTC+8 (CST)，邮件显示时间与本地一致
+- ✅ **修复 SMTP 连接失败**：端口 465 使用 SSL 直连而非 STARTTLS，解决 GitHub Actions SMTP 端口封锁
+- ✅ **修复邮件配置 JSON 格式错误**：GitHub Actions 生成 notify.json 时格式规范化
+- ✅ **修复 Secrets 语法错误**：环境变量引用方式修正，避免 YAML 解析错误
+- ✅ **增强邮件通知诊断**：更详细的发送状态日志（提供商、端口、连接方式、错误详情）
+
+#### 📝 配置变更
+- 📄 `config/notify.json`: 新增 `email_provider` 字段（smtp / sendgrid / resend）
+- 📄 `config/notify.json`: SMTP 配置字段重命名（`smtp_server` → `email_smtp_host`，`smtp_port` → `email_smtp_port` 等）
+- 📄 `.github/workflows/iptv.yml`: 新增 "Setup email notification config" 步骤，通过 Secrets 注入配置
+- 📄 `script/notify.py`: 新增 `send_email_sendgrid()` 和 `send_email_resend()` 函数
+
+#### 💡 使用体验提升
+- 🌐 GitHub Actions 邮件不再被端口封锁，SMTP 465 SSL 直连可靠发送
+- 🔑 凭证安全：SMTP 密码通过 GitHub Secrets 注入，不提交到仓库
+- 📧 三种发送方式灵活切换，本地用 SMTP，云端用 API
+- 🕐 邮件时间戳正确显示北京时间
+
+---
 
 ### v2.12.0 (2026-07-01) - GitHub Actions 全面优化 & 智能邮件通知 & 性能提升
 
