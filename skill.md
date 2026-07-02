@@ -220,41 +220,113 @@ CONFIG = {
 采集完成 → notify.py → 计算 M3U/M3U8 的 MD5 → 与上次对比 → 有变更则发邮件
 ```
 
-### 5.2 配置文件（config/notify.json）
+### 5.2 多邮件提供商支持
+
+通过 `email_provider` 字段选择发送方式：
+
+| 提供商 | 配置值 | 适用场景 | 关键配置字段 |
+|--------|--------|---------|-------------|
+| SMTP | `smtp`（默认） | 本地运行 | `email_smtp_host`, `email_smtp_port`, `email_smtp_user`, `email_smtp_password` |
+| SendGrid | `sendgrid` | GitHub Actions | `sendgrid_api_key`, `sendgrid_from_email` |
+| Resend | `resend` | GitHub Actions 备选 | `resend_api_key`, `resend_from_email` |
+
+**发送函数路由**：
+```python
+def send_email(config, changes):
+    email_provider = config.get('email_provider', 'smtp').lower()
+    if email_provider == 'sendgrid':
+        return send_email_sendgrid(config, changes)
+    elif email_provider == 'resend':
+        return send_email_resend(config, changes)
+    else:
+        return send_email_smtp(config, changes)
+```
+
+### 5.3 配置文件（config/notify.json）
+
+#### SMTP 模式（默认，本地运行推荐）
 
 ```json
 {
-  "email_notification_enabled": false,
+  "email_provider": "smtp",
+  "email_notification_enabled": true,
   "email_smtp_host": "smtp.qq.com",
-  "email_smtp_port": 587,
+  "email_smtp_port": 465,
   "email_smtp_user": "your_email@qq.com",
   "email_smtp_password": "your_smtp_authorization_code",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
-  "watch_files": ["best_sorted.m3u", "best_sorted.m3u8"],
-  "email_cooldown_seconds": 300,
-  "email_max_fail_count": 3,
-  "email_fail_cooldown_seconds": 1800
+  "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
 
-### 5.3 邮件发送逻辑
+#### SendGrid API 模式（GitHub Actions 推荐）
 
-- 支持 SMTP SSL（端口 465）和 STARTTLS（端口 587）
-- 邮件同时包含纯文本和 HTML 两种格式
-- 冷却机制：同一收件人 `email_cooldown_seconds` 内不重复发送
-- 失败保护：连续失败 `email_max_fail_count` 次后暂停 `email_fail_cooldown_seconds` 秒
+```json
+{
+  "email_provider": "sendgrid",
+  "email_notification_enabled": true,
+  "sendgrid_api_key": "SG.xxxxx",
+  "sendgrid_from_email": "noreply@yourdomain.com",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
+}
+```
+
+#### Resend API 模式（GitHub Actions 备选）
+
+```json
+{
+  "email_provider": "resend",
+  "email_notification_enabled": true,
+  "resend_api_key": "re_xxxxx",
+  "resend_from_email": "onboarding@resend.dev",
+  "email_from_name": "IPTV直播源监控",
+  "email_to": "recipient@example.com",
+  "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
+}
+```
+
+### 5.4 邮件发送逻辑
+
+- 支持 SMTP_SSL（端口 465）和 STARTTLS（端口 587）双模式
+- 端口 465 → `smtplib.SMTP_SSL(host, port, timeout=30)`
+- 端口 587 → `smtplib.SMTP(host, port, timeout=30)` + `starttls()`
+- SendGrid/Resend 通过 HTTPS API 发送，绕过 SMTP 端口封锁
+- 时区：`_CST = timezone(timedelta(hours=8))`，邮件时间戳使用 UTC+8
 - 变更状态通过 `.notify_hashes.json` 持久化
 
-### 5.4 集成方式
+### 5.5 GitHub Actions 邮件配置注入
+
+Workflow 通过 Secrets 环境变量注入 SMTP 凭证，运行时自动生成 `config/notify.json`：
+
+| Secret 名称 | 说明 | 示例 |
+|-------------|------|------|
+| `SMTP_HOST` | SMTP 服务器地址 | `smtp.qq.com` |
+| `SMTP_PORT` | SMTP 端口 | `465` |
+| `SMTP_USER` | 发件邮箱账号 | `your@qq.com` |
+| `SMTP_PASSWORD` | 授权码/密码 | `elracegpxeyabceb` |
+| `EMAIL_TO` | 收件邮箱 | `recipient@example.com` |
+
+### 5.6 集成方式
 
 在 `iptv_tool.sh` 的 `run_collection()` 末尾调用：
 
 ```bash
 if [ -f "$WORK_DIR/script/notify.py" ]; then
     echo "[*] 检测文件变更并发送通知..."
-    $PYTHON_CMD "$WORK_DIR/script/notify.py"
+    $PYTHON_CMD "$WORK_DIR/script/notify.py" --once
 fi
+```
+
+在 `iptv_tool.bat` 中调用：
+
+```batch
+if exist "%~dp0notify.py" (
+    echo [*] 检测文件变更并发送通知...
+    %PYTHON_CMD% "%~dp0notify.py" --once
+)
 ```
 
 ---
@@ -268,17 +340,72 @@ on:
   schedule:
     - cron: '0 */4 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  IPTV_TIMEOUT: 3
+  IPTV_MAX_PARALLEL: 200
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 ```
 
 ### 6.2 采集步骤
 
-1. Checkout 代码
-2. 设置 Node.js 24
-3. 设置 Python 3.10
-4. 安装 aiohttp
+1. Checkout 代码（`ref: main`）
+2. 设置 Python 3.10
+3. 安装 aiohttp
+4. **Setup email notification config**：通过 Secrets 环境变量注入 SMTP 凭证，运行时生成 `config/notify.json`
 5. 运行 `iptv.py`
-6. 更新 README.md 中的时间戳和文件链接
-7. 提交变更
+6. 获取当前时间戳
+7. 更新 README.md 中的时间戳和文件链接
+8. 提交变更（`git add -f` 强制添加 M3U 文件）
+9. **Send email notification**：`python script/notify.py --once`
+10. **Save and commit notify hashes**：保存并推送 `.notify_hashes.json`
+
+### 6.3 邮件配置注入
+
+Workflow 中通过 Python 脚本在运行时生成 `config/notify.json`：
+
+```yaml
+- name: Setup email notification config
+  env:
+    SMTP_HOST: ${{ secrets.SMTP_HOST }}
+    SMTP_PORT: ${{ secrets.SMTP_PORT }}
+    SMTP_USER: ${{ secrets.SMTP_USER }}
+    SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+    EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  run: |
+    python3 << 'PYEOF'
+    import json, os
+    config = {
+      'email_provider': 'smtp',
+      'email_notification_enabled': True,
+      'email_smtp_host': os.environ.get('SMTP_HOST', 'smtp.qq.com'),
+      'email_smtp_port': int(os.environ.get('SMTP_PORT', '587')),
+      'email_smtp_user': os.environ.get('SMTP_USER', ''),
+      'email_smtp_password': os.environ.get('SMTP_PASSWORD', ''),
+      'email_from_name': 'IPTV',
+      'email_to': os.environ.get('EMAIL_TO', ''),
+      'watch_files': ['file/best_sorted.m3u', 'file/best_sorted.m3u8']
+    }
+    with open('config/notify.json', 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+    PYEOF
+```
+
+### 6.4 已解决的技术问题
+
+| 问题 | 解决方案 |
+|------|---------|
+| 路径错误 | 改为 `file/` 目录 |
+| .gitignore 阻止 | `git add -f` 强制添加 + 例外规则 |
+| 403 权限错误 | `permissions: contents: write` |
+| 运行速度慢 | `IPTV_TIMEOUT=3` + `MAX_PARALLEL=200` |
+| 邮件通知缺失 | 添加 notify 步骤 + 哈希持久化 |
+| SMTP 端口封锁 | SMTP_SSL (465) + SendGrid/Resend API |
+| 邮件时区错误 | UTC+8 (CST) 时区修正 |
+| 凭证安全 | GitHub Secrets 环境变量注入 |
 
 ---
 
@@ -1279,3 +1406,149 @@ else:
 | 文件哈希变化 | 发送邮件，标记为"文件已变更" |
 | 文件无变化 | 跳过，不发送邮件 |
 | 文件不存在 | 跳过 |
+
+---
+
+## v2.13.0 变更记录 - 多邮件提供商支持 & SMTP_SSL & 时区修复
+
+**变更时间**: 2026-07-02
+
+### 一、多邮件提供商架构
+
+#### 1.1 新增 SendGrid API 发送
+
+通过 HTTPS API 发送邮件，绕过 GitHub Actions SMTP 端口封锁，无域名验证限制：
+
+```python
+def send_email_sendgrid(config, changes):
+    api_key = config.get('sendgrid_api_key', '')
+    from_email = config.get('sendgrid_from_email', 'noreply@github-actions.com')
+    to_email = config.get('email_to', '')
+    
+    # 构建请求
+    payload = {
+        'personalizations': [{'to': [{'email': to_email}], 'subject': subject}],
+        'from': {'email': from_email, 'name': from_name},
+        'content': [{'type': 'text/plain', 'value': body_text}],
+        'attachments': attachments  # Base64 编码
+    }
+    
+    req = urllib.request.Request(
+        'https://api.sendgrid.com/v3/mail/send',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        method='POST'
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        return response.getcode() in [200, 202]
+```
+
+#### 1.2 新增 Resend API 发送
+
+备选 HTTPS API 方式，免费额度 100 封/天：
+
+```python
+def send_email_resend(config, changes):
+    api_key = config.get('resend_api_key', '')
+    from_email = config.get('resend_from_email', 'onboarding@resend.dev')
+    
+    payload = {
+        'from': f'{from_name} <{from_email}>',
+        'to': [to_email],
+        'subject': subject,
+        'html': f'<pre>{body_text}</pre>',
+        'attachments': attachments
+    }
+    
+    req = urllib.request.Request(
+        'https://api.resend.com/emails',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        method='POST'
+    )
+```
+
+#### 1.3 提供商路由
+
+```python
+def send_email(config, changes):
+    email_provider = config.get('email_provider', 'smtp').lower()
+    if email_provider == 'sendgrid':
+        return send_email_sendgrid(config, changes)
+    elif email_provider == 'resend':
+        return send_email_resend(config, changes)
+    else:
+        return send_email_smtp(config, changes)
+```
+
+### 二、SMTP_SSL 支持
+
+端口 465 使用 `smtplib.SMTP_SSL` 直连，解决 GitHub Actions SMTP 端口封锁：
+
+```python
+if smtp_port == 465:
+    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+else:
+    server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+    server.starttls()
+```
+
+### 三、时区修复
+
+邮件时间戳从 UTC 改为 UTC+8 (CST)：
+
+```python
+_CST = timezone(timedelta(hours=8))
+
+def _now_cst():
+    return datetime.now(_CST)
+
+current_time = _now_cst().strftime('%Y-%m-%d %H:%M:%S')
+```
+
+### 四、GitHub Actions 邮件配置注入
+
+通过 Secrets 环境变量注入 SMTP 凭证，运行时 Python 脚本自动生成 `config/notify.json`：
+
+```yaml
+- name: Setup email notification config
+  env:
+    SMTP_HOST: ${{ secrets.SMTP_HOST }}
+    SMTP_PORT: ${{ secrets.SMTP_PORT }}
+    SMTP_USER: ${{ secrets.SMTP_USER }}
+    SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+    EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  run: |
+    python3 << 'PYEOF'
+    import json, os
+    config = {
+      'email_provider': 'smtp',
+      'email_notification_enabled': True,
+      'email_smtp_host': os.environ.get('SMTP_HOST', 'smtp.qq.com'),
+      'email_smtp_port': int(os.environ.get('SMTP_PORT', '587')),
+      'email_smtp_user': os.environ.get('SMTP_USER', ''),
+      'email_smtp_password': os.environ.get('SMTP_PASSWORD', ''),
+      'email_from_name': 'IPTV',
+      'email_to': os.environ.get('EMAIL_TO', ''),
+      'watch_files': ['file/best_sorted.m3u', 'file/best_sorted.m3u8']
+    }
+    with open('config/notify.json', 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+    PYEOF
+```
+
+### 五、邮件提供商对比
+
+| 特性 | SMTP | SendGrid API | Resend API |
+|------|------|-------------|------------|
+| 适用场景 | 本地运行 | GitHub Actions | GitHub Actions |
+| 端口限制 | 可能被封（587/465） | 无（HTTPS 443） | 无（HTTPS 443） |
+| 域名验证 | 不需要 | 不需要 | 需要（免费额度） |
+| 免费额度 | 取决于邮箱服务商 | 100封/天 | 100封/天 |
+| 附件支持 | ✅ | ✅ | ✅ |
+| 配置复杂度 | 低 | 低 | 中 |
+
+---
+
+**最后更新**: 2026-07-02
+**版本**: v2.13.0 (多邮件提供商支持 & SMTP_SSL & 时区修复)
