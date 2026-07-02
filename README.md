@@ -579,6 +579,20 @@ crontab -l | grep iptv
 
 欢迎提交 Issue 和 Pull Request！
 
+### 文档同步更新规则
+
+以下三个文件必须**同步更新**，任何涉及功能变更、版本更新、文档修改的操作都必须同时修改：
+
+| 文件 | 面向 | 作用 |
+|------|------|------|
+| `README.md` | 用户 | 项目文档 |
+| `skill.md` | 开发者 | 代码规范文档 |
+| `.trae/skills/iptv-dev/SKILL.md` | AI (Trae) | 开发技能文档 |
+
+**更新流程**：同步修改 → `git add` 三个文件 → `git commit` → `git push origin main`
+
+**版本号同步**：版本号唯一来源为 `README.md`，格式 `### v1.2.3 (YYYY-MM-DD)`，三个文件的版本号和更新日期必须保持一致。
+
 ## 📧 联系方式
 
 如有问题或建议，请通过以下方式联系：
