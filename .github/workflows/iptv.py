@@ -1380,20 +1380,156 @@ def generate_sorted_m3u(valid_entries, cctv_channels, province_channels, filenam
                     smart_category_channels.get(smart_category, [])] + \
                    other_channels
 
-    # 生成 m3u8 的文件名 (将后缀 .m3u 替换为 .m3u8)
     m3u8_filename = filename.replace('.m3u', '.m3u8')
+    txt_filename = filename.replace('.m3u', '.txt')
     generated_at = time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime())
-    
-    # 写入 M3U 和 M3U8 文件
+
+    epg_urls = "https://live.fanmingming.cn/e.xml,https://epg.51zmt.top:8000/e.xml"
+
     for fname in [filename, m3u8_filename]:
         with open(fname, 'w', encoding='utf-8') as f:
-            f.write("#EXTM3U\n")
+            f.write(f'#EXTM3U url-tvg="{epg_urls}"\n')
             f.write(f"# Generated-Time: {generated_at}\n")
             f.write(f"# Channel-Count: {len(all_channels)}\n")
             for channel_info in all_channels:
                 f.write(
                     f"#EXTINF:-1 tvg-name=\"{channel_info['channel']}\" tvg-logo=\"{channel_info['logo']}\" group-title=\"{channel_info['group_title']}\",{channel_info['channel']}\n")
                 f.write(f"{channel_info['url']}\n")
+
+    with open(txt_filename, 'w', encoding='utf-8') as f:
+        f.write(f"# IPTV 频道列表 - Generated: {generated_at}\n")
+        f.write(f"# 频道总数: {len(all_channels)}\n")
+        f.write(f"# 央视频道,{len(cctv_channels_list)}\n")
+        f.write(f"# 卫视频道,{len(satellite_channels)}\n")
+        for province in sorted(province_channels_list):
+            f.write(f"# {province},{len(province_channels_list[province])}\n")
+        for smart_category in SMART_CATEGORY_KEYWORDS:
+            if smart_category in smart_category_channels:
+                f.write(f"# {smart_category},{len(smart_category_channels[smart_category])}\n")
+        f.write(f"# 其他频道,{len(other_channels)}\n")
+        f.write("\n")
+        current_group = None
+        for channel_info in all_channels:
+            if channel_info['group_title'] != current_group:
+                current_group = channel_info['group_title']
+                f.write(f"{current_group},#genre#\n")
+            f.write(f"{channel_info['channel']},{channel_info['url']}\n")
+    print(f"Generated TXT file: {txt_filename}")
+
+    generate_stats_report(all_channels, cctv_channels_list, satellite_channels,
+                          province_channels_list, smart_category_channels, other_channels,
+                          generated_at)
+
+    generate_api_data(all_channels, generated_at)
+
+    generate_proxy_m3u(all_channels, generated_at)
+
+    return all_channels
+
+
+def generate_stats_report(all_channels, cctv_channels_list, satellite_channels,
+                          province_channels_list, smart_category_channels, other_channels,
+                          generated_at):
+    stats = {
+        "generated_at": generated_at,
+        "total_channels": len(all_channels),
+        "categories": {
+            "央视频道": len(cctv_channels_list),
+            "卫视频道": len(satellite_channels),
+        },
+        "province_channels": {
+            province: len(channels) for province, channels in sorted(province_channels_list.items())
+        },
+        "smart_category_channels": {
+            category: len(channels) for category, channels in sorted(smart_category_channels.items())
+        },
+        "other_channels": len(other_channels),
+        "top_latency_channels": [],
+    }
+
+    latency_channels = [
+        {"channel": ch["channel"], "url": ch["url"], "group": ch["group_title"],
+         "latency_ms": round(ch.get("latency", 0) * 1000, 1)}
+        for ch in all_channels if ch.get("latency") is not None
+    ]
+    latency_channels.sort(key=lambda x: x["latency_ms"])
+    stats["top_latency_channels"] = latency_channels[:20]
+
+    stats_file = FILE_DIR / 'stats_report.json'
+    with open(stats_file, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
+    print(f"Generated stats report: {stats_file}")
+
+    print(f"\n{'='*50}")
+    print(f"  IPTV 采集统计报告")
+    print(f"{'='*50}")
+    print(f"  生成时间: {generated_at}")
+    print(f"  频道总数: {len(all_channels)}")
+    print(f"  {'─'*46}")
+    print(f"  央视频道: {len(cctv_channels_list)}")
+    print(f"  卫视频道: {len(satellite_channels)}")
+    for province in sorted(province_channels_list):
+        print(f"  {province}: {len(province_channels_list[province])}")
+    for category in sorted(smart_category_channels):
+        print(f"  {category}: {len(smart_category_channels[category])}")
+    print(f"  其他频道: {len(other_channels)}")
+    print(f"  {'─'*46}")
+    if latency_channels:
+        avg_latency = sum(c["latency_ms"] for c in latency_channels) / len(latency_channels)
+        print(f"  平均延迟: {avg_latency:.0f}ms")
+        print(f"  最快频道: {latency_channels[0]['channel']} ({latency_channels[0]['latency_ms']}ms)")
+        slowest = latency_channels[-1]
+        print(f"  最慢频道: {slowest['channel']} ({slowest['latency_ms']}ms)")
+    print(f"{'='*50}\n")
+
+
+def generate_api_data(all_channels, generated_at):
+    api_data = {
+        "generated_at": generated_at,
+        "total": len(all_channels),
+        "channels": []
+    }
+
+    for ch in all_channels:
+        api_data["channels"].append({
+            "name": ch["channel"],
+            "url": ch["url"],
+            "logo": ch["logo"],
+            "group": ch["group_title"],
+            "latency_ms": round(ch.get("latency", 0) * 1000, 1) if ch.get("latency") else None,
+        })
+
+    api_file = FILE_DIR / 'api_data.json'
+    with open(api_file, 'w', encoding='utf-8') as f:
+        json.dump(api_data, f, ensure_ascii=False, indent=2)
+    print(f"Generated API data: {api_file}")
+
+
+def generate_proxy_m3u(all_channels, generated_at):
+    proxy_prefixes = [
+        ("https://gh-proxy.com/", "gh-proxy"),
+        ("https://mirror.ghproxy.com/", "ghproxy-mirror"),
+    ]
+
+    github_raw_pattern = re.compile(r'^https://raw\.githubusercontent\.com/')
+    epg_urls = "https://live.fanmingming.cn/e.xml,https://epg.51zmt.top:8000/e.xml"
+
+    for prefix, name in proxy_prefixes:
+        proxy_filename = str(FILE_DIR / f'best_sorted_{name}.m3u')
+        with open(proxy_filename, 'w', encoding='utf-8') as f:
+            f.write(f'#EXTM3U url-tvg="{epg_urls}"\n')
+            f.write(f"# Generated-Time: {generated_at}\n")
+            f.write(f"# Channel-Count: {len(all_channels)}\n")
+            f.write(f"# Proxy: {name}\n")
+            for channel_info in all_channels:
+                url = channel_info['url']
+                if github_raw_pattern.match(url):
+                    url = prefix + url
+                f.write(
+                    f"#EXTINF:-1 tvg-name=\"{channel_info['channel']}\" tvg-logo=\"{channel_info['logo']}\" group-title=\"{channel_info['group_title']}\",{channel_info['channel']}\n")
+                f.write(f"{url}\n")
+        print(f"Generated proxy M3U ({name}): {proxy_filename}")
+
 
 def load_province_channels(files):
     """加载多个省份的频道列表"""
@@ -1536,7 +1672,6 @@ async def main(file_urls, cctv_channel_file, province_channel_files):
     best_entries = select_best_streams(deduplicated_entries)
     print(f"Valid streams: {len(all_valid_entries)}, deduplicated: {len(deduplicated_entries)}, best-per-channel: {len(best_entries)}")
 
-    # 生成排序后的 M3U 文件
     generate_sorted_m3u(best_entries, cctv_channels, province_channels, CONFIG["output_file"])
     print(f"Generated sorted M3U file: {CONFIG['output_file']}")
 

@@ -1,0 +1,69 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout fork
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Configure git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+    - name: Sync upstream changes
+      env:
+        UPSTREAM_REPO: ${{ secrets.UPSTREAM_REPO }}
+        UPSTREAM_BRANCH: ${{ secrets.UPSTREAM_BRANCH }}
+      run: |
+        if [ -z "$UPSTREAM_REPO" ]; then
+          echo "UPSTREAM_REPO secret not set, skipping sync"
+          echo "To enable auto-sync, add these secrets to your repository:"
+          echo "  UPSTREAM_REPO  - e.g. https://github.com/original-owner/Collect-IPTV.git"
+          echo "  UPSTREAM_BRANCH - e.g. main (optional, defaults to main)"
+          exit 0
+        fi
+
+        BRANCH="${UPSTREAM_BRANCH:-main}"
+        echo "=== Syncing from $UPSTREAM_REPO (branch: $BRANCH) ==="
+
+        git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || true
+        git fetch upstream "$BRANCH"
+
+        MERGE_RESULT=$(git merge "upstream/$BRANCH" --no-edit 2>&1) || true
+
+        if echo "$MERGE_RESULT" | grep -q "Already up to date"; then
+          echo "Already up to date, no changes to sync"
+        elif echo "$MERGE_RESULT" | grep -q "CONFLICT"; then
+          echo "=== Merge conflicts detected ==="
+          echo "Attempting to resolve conflicts by keeping our changes..."
+          git diff --name-only --diff-filter=U | while read file; do
+            echo "  Resolving conflict in: $file (keeping ours)"
+            git checkout --ours "$file"
+            git add "$file"
+          done
+          git commit --no-edit || true
+          git push origin HEAD:main
+          echo "Conflicts resolved and pushed"
+        else
+          git push origin HEAD:main
+          echo "Upstream changes merged and pushed successfully"
+        fi
+
+    - name: Cleanup
+      run: |
+        git remote remove upstream 2>/dev/null || true

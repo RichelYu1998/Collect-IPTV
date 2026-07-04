@@ -37,6 +37,10 @@
 | 🔊 **音频转码** | 自动检测并转码AC3/EAC3等不兼容音频格式 |
 | 📧 **邮件通知** | 文件变更时自动发送邮件，含M3U/M3U8附件 |
 | 🔄 **定时任务** | 每4小时自动更新，确保数据新鲜 |
+| 📊 **统计报告** | 自动生成频道统计、延迟排行、分类报告 |
+| 🔌 **REST API** | 提供频道查询/搜索/统计API接口 |
+| 📝 **多格式输出** | 同时生成M3U/M3U8/TXT三种格式 |
+| 🌐 **代理加速** | 自动生成gh-proxy镜像M3U，加速GitHub源访问 |
 
 ### 平台支持
 
@@ -148,7 +152,10 @@ Collect-IPTV/
 │   └── macos/bin/         # macOS版本
 ├── file/                  # 运行时数据
 │   ├── best_sorted.m3u    # M3U播放列表
-│   └── best_sorted.m3u8   # M3U8播放列表
+│   ├── best_sorted.m3u8   # M3U8播放列表
+│   ├── best_sorted.txt    # TXT频道列表
+│   ├── api_data.json      # API数据文件
+│   └── stats_report.json  # 统计报告
 ├── output/                # Web服务器根目录
 │   └── index.html         # Web界面
 ├── server.py              # 本地Web服务器
@@ -432,6 +439,11 @@ best_sorted.m3u/m3u8
 | `/proxy/<url>` | GET | CORS代理 |
 | `/file/*.m3u` | GET | M3U播放列表 |
 | `/file/*.m3u8` | GET | M3U8播放列表 |
+| `/file/*.txt` | GET | TXT频道列表 |
+| `/api/channels` | GET | 频道列表API（支持 `?group=` `?name=` `?region=` `?limit=` 参数） |
+| `/api/stats` | GET | 采集统计报告API |
+| `/api/groups` | GET | 频道分组API |
+| `/api/search?q=关键词` | GET | 频道搜索API |
 
 ---
 
@@ -611,6 +623,33 @@ Made with ❤️ by Collect-IPTV Team
 ---
 
 ## 📜 完整更新历史
+
+### v2.14.0 (2026-07-04) - 多格式输出 & REST API & 代理加速 & 多仓库同步 & EPG节目单
+
+#### ✨ 新功能
+- ✅ **TXT格式频道列表**：自动生成 `best_sorted.txt`，兼容更多播放器，含分类统计信息
+- ✅ **REST API 接口**：新增4个API端点（`/api/channels`、`/api/stats`、`/api/groups`、`/api/search`），支持按分组/名称/地区查询和模糊搜索
+- ✅ **自动生成统计报告**：每次运行输出 `stats_report.json`，含频道数量、分类统计、延迟排行、最快/最慢频道
+- ✅ **自动代理/加速**：生成 gh-proxy 和 ghproxy-mirror 镜像 M3U 文件，加速 GitHub 源访问
+- ✅ **多仓库自动同步**：新增 `sync-upstream.yml` 工作流，Fork 玩家自动同步上游更新，冲突时保留本地修改
+- ✅ **EPG节目单**：M3U/M3U8 文件头部自动写入 `url-tvg` EPG地址（fanmingming + 51zmt 双源），VLC/TiviMate 等播放器自动加载节目单
+
+#### 📺 VLC/播放器订阅地址
+
+| 格式 | 地址 |
+|------|------|
+| M3U | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` |
+| M3U8 | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u8` |
+| CDN加速 | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted.m3u` |
+| gh-proxy | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` |
+
+#### 🔄 多仓库同步配置
+
+Fork 玩家在 Settings → Secrets 中添加：
+- `UPSTREAM_REPO`：上游仓库地址（如 `https://github.com/RichelYu1998/Collect-IPTV.git`）
+- `UPSTREAM_BRANCH`：上游分支（默认 `main`）
+
+---
 
 ### v2.13.0 (2026-07-02) - 多邮件提供商支持 & SMTP_SSL & 时区修复
 

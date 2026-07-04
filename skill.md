@@ -22,8 +22,13 @@
 │   └── notify.json.example      # 通知配置模板
 ├── server.py                    # 本地 Web 服务（代理/转码/HLS）
 ├── file/                        # 运行时数据目录
-│   ├── best_sorted.m3u          # 采集输出
-│   ├── best_sorted.m3u8         # 采集输出
+│   ├── best_sorted.m3u          # M3U播放列表（含EPG）
+│   ├── best_sorted.m3u8         # M3U8播放列表（含EPG）
+│   ├── best_sorted.txt          # TXT频道列表
+│   ├── api_data.json            # REST API 数据源
+│   ├── stats_report.json        # 采集统计报告
+│   ├── best_sorted_gh-proxy.m3u # gh-proxy 加速版
+│   ├── best_sorted_ghproxy-mirror.m3u # ghproxy 镜像加速版
 │   └── .cdn_cache.json          # CDN 缓存
 ├── ffmpeg/                      # FFmpeg 二进制（自动下载，含 ffmpeg + ffprobe）
 ├── .venv/                       # Python 虚拟环境（自动创建）
@@ -140,6 +145,7 @@ CONFIG = {
 | `/proxy/` | CORS 代理，转发外部流媒体请求（流式 + 预加载） |
 | `/transcode/` | 音频转码，AC3/EAC3 → AAC |
 | `/tstream/` | 转码流管理，HLS 分片 |
+| `/api/` | REST API，频道查询/搜索/统计/分组 |
 
 ### 4.2 流式代理与预加载
 
@@ -209,6 +215,37 @@ CONFIG = {
 | `IPTV_PRELOAD_WAIT_MS` | 500 | TS未命中时等待预加载的毫秒数（0=禁用等待） |
 | `IPTV_PRELOAD_PIPELINE_INTERVAL` | 1 | 持续预热管道刷新间隔（秒） |
 | `IPTV_PRELOAD_PIPELINE_MAX_AGE` | 300 | 持续预热管道最大存活时间（秒） |
+
+### 4.4 REST API 端点
+
+server.py 新增 `/api/` 前缀的 REST API，数据源为 `file/api_data.json` 和 `file/stats_report.json`：
+
+| 端点 | 方法 | 描述 | 参数 |
+|------|------|------|------|
+| `/api/channels` | GET | 频道列表 | `?group=` `?name=` `?region=` `?limit=` |
+| `/api/stats` | GET | 采集统计报告 | 无 |
+| `/api/groups` | GET | 频道分组信息 | 无 |
+| `/api/search` | GET | 频道搜索 | `?q=关键词`（必填） |
+
+**实现要点**：
+- 所有 API 返回 `Content-Type: application/json; charset=utf-8` + CORS 头
+- 数据从 `file/api_data.json` 读取，由 `iptv.py` 的 `generate_api_data()` 生成
+- 查询参数均为可选，支持模糊匹配（`.lower()` 比较）
+- 错误响应格式：`{"error": "描述信息"}`
+
+### 4.5 EPG 节目单
+
+M3U/M3U8 文件头部自动写入 EPG 地址，播放器自动加载节目单：
+
+```
+#EXTM3U url-tvg="https://live.fanmingming.cn/e.xml,https://epg.51zmt.top:8000/e.xml"
+```
+
+**EPG 源**：
+- `https://live.fanmingming.cn/e.xml` — fanmingming，覆盖央卫视频道
+- `https://epg.51zmt.top:8000/e.xml` — 51zmt，覆盖更全含地方台
+
+**实现位置**：`iptv.py` 的 `generate_sorted_m3u()` 和 `generate_proxy_m3u()` 中写入
 
 ---
 
@@ -406,6 +443,77 @@ Workflow 中通过 Python 脚本在运行时生成 `config/notify.json`：
 | SMTP 端口封锁 | SMTP_SSL (465) + SendGrid/Resend API |
 | 邮件时区错误 | UTC+8 (CST) 时区修正 |
 | 凭证安全 | GitHub Secrets 环境变量注入 |
+
+---
+
+## 七-A、多仓库自动同步（sync-upstream.yml）
+
+### 工作原理
+
+Fork 玩家的仓库每天自动同步上游更新：
+
+```
+定时触发 → fetch upstream → merge → 冲突检测 → 自动解决(保留本地) → push
+```
+
+### 配置方法
+
+在 GitHub 仓库 Settings → Secrets and variables → Actions 中添加：
+
+| Secret | 说明 | 示例 |
+|--------|------|------|
+| `UPSTREAM_REPO` | 上游仓库地址 | `https://github.com/RichelYu1998/Collect-IPTV.git` |
+| `UPSTREAM_BRANCH` | 上游分支（可选） | `main`（默认） |
+
+### 冲突解决策略
+
+- 检测到 CONFLICT 时，自动 `git checkout --ours` 保留本地修改
+- 解决后自动 commit + push
+
+### 工作流配置
+
+```yaml
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 每天同步一次
+  workflow_dispatch:        # 支持手动触发
+```
+
+---
+
+## 七-B、代理加速与多格式输出
+
+### 代理加速 M3U
+
+`generate_proxy_m3u()` 函数为 GitHub raw 链接自动生成加速版 M3U：
+
+| 代理 | 前缀 | 输出文件 |
+|------|------|---------|
+| gh-proxy | `https://gh-proxy.com/` | `best_sorted_gh-proxy.m3u` |
+| ghproxy-mirror | `https://mirror.ghproxy.com/` | `best_sorted_ghproxy-mirror.m3u` |
+
+**逻辑**：仅对 `https://raw.githubusercontent.com/` 开头的 URL 添加代理前缀，其他 URL 保持不变。
+
+### 多格式输出
+
+`generate_sorted_m3u()` 同时生成3种格式 + 2个数据文件 + 2个代理文件：
+
+| 文件 | 格式 | 用途 |
+|------|------|------|
+| `best_sorted.m3u` | M3U + EPG | VLC/播放器订阅 |
+| `best_sorted.m3u8` | M3U8 + EPG | M3U8格式订阅 |
+| `best_sorted.txt` | TXT | 兼容更多播放器 |
+| `api_data.json` | JSON | REST API 数据源 |
+| `stats_report.json` | JSON | 采集统计报告 |
+| `best_sorted_gh-proxy.m3u` | M3U + EPG | gh-proxy 加速版 |
+| `best_sorted_ghproxy-mirror.m3u` | M3U + EPG | ghproxy 镜像加速版 |
+
+### 统计报告
+
+`generate_stats_report()` 输出：
+- 频道总数、分类统计（央视/卫视/省份/主题/其他）
+- 延迟排行 Top 20
+- 控制台格式化输出
 
 ---
 
@@ -1565,5 +1673,5 @@ current_time = _now_cst().strftime('%Y-%m-%d %H:%M:%S')
 
 ---
 
-**最后更新**: 2026-07-02
-**版本**: v2.13.0 (多邮件提供商支持 & SMTP_SSL & 时区修复)
+**最后更新**: 2026-07-04
+**版本**: v2.14.0 (多格式输出 & REST API & 代理加速 & 多仓库同步 & EPG节目单)

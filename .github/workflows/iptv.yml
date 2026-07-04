@@ -88,9 +88,13 @@ jobs:
       run: |
         file_link="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref }}/file/best_sorted.m3u"
         file_link1="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref }}/file/best_sorted.m3u8"
+        file_link_txt="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref }}/file/best_sorted.txt"
+        file_link_api="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref }}/file/api_data.json"
         sed -i "s|<!-- Last Run Time -->.*|<!-- Last Run Time --> ${GET_TIME}|" README.md
         sed -i "s|<!-- Generated File Link M3U -->.*|<!-- Generated File Link M3U --> [View M3U File](${file_link})|" README.md
         sed -i "s|<!-- Generated File Link M3U8 -->.*|<!-- Generated File Link M3U8 > [View M3U8 File](${file_link1})|" README.md
+        sed -i "s|<!-- Generated File Link TXT -->.*|<!-- Generated File Link TXT --> [View TXT File](${file_link_txt})|" README.md
+        sed -i "s|<!-- Generated File Link API -->.*|<!-- Generated File Link API --> [View API Data](${file_link_api})|" README.md
         
     - name: Commit and push changes
       run: |
@@ -102,6 +106,11 @@ jobs:
           git add README.md
           git add -f file/best_sorted.m3u
           git add -f file/best_sorted.m3u8
+          git add -f file/best_sorted.txt
+          git add -f file/stats_report.json
+          git add -f file/api_data.json
+          git add -f file/best_sorted_gh-proxy.m3u 2>/dev/null || true
+          git add -f file/best_sorted_ghproxy-mirror.m3u 2>/dev/null || true
           
           echo "=== 检查是否有变更 ==="
           if git diff --cached --quiet; then

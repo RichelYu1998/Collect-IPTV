@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import sys
 import platform
@@ -25,6 +25,7 @@ PORT = int(os.environ.get('IPTV_SERVER_PORT', '8000'))
 PROXY_PREFIX = '/proxy/'
 TRANSCODE_PREFIX = '/transcode/'
 TSTREAM_PREFIX = '/tstream/'
+API_PREFIX = '/api/'
 MAX_CONTENT_LENGTH = int(os.environ.get('IPTV_MAX_CONTENT_LENGTH', str(50 * 1024 * 1024)))
 TRANSCODE_AUDIO_BITRATE = os.environ.get('IPTV_TRANSCODE_AUDIO_BITRATE', '128k')
 TRANSCODE_AUDIO_CHANNELS = os.environ.get('IPTV_TRANSCODE_AUDIO_CHANNELS', '2')
@@ -1352,6 +1353,8 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_transcode()
         elif self.path.startswith(TSTREAM_PREFIX):
             self._handle_tstream()
+        elif self.path.startswith(API_PREFIX):
+            self._handle_api()
         else:
             super().do_GET()
 
@@ -1793,6 +1796,112 @@ class CORSProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_api(self):
+        path_part = self.path[len(API_PREFIX):]
+        query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+
+        api_data_file = PROJECT_ROOT / 'file' / 'api_data.json'
+        stats_file = PROJECT_ROOT / 'file' / 'stats_report.json'
+
+        if path_part == '' or path_part == 'channels':
+            if not api_data_file.exists():
+                self._send_json_error(404, 'API data not found. Run iptv.py first.')
+                return
+            try:
+                with open(api_data_file, 'r', encoding='utf-8') as f:
+                    api_data = json.load(f)
+            except Exception as e:
+                self._send_json_error(500, f'Failed to read API data: {e}')
+                return
+
+            group = query_params.get('group', [None])[0]
+            name = query_params.get('name', [None])[0]
+            region = query_params.get('region', [None])[0]
+            limit = int(query_params.get('limit', ['0'])[0])
+
+            channels = api_data.get('channels', [])
+
+            if group:
+                channels = [ch for ch in channels if group.lower() in ch.get('group', '').lower()]
+            if name:
+                channels = [ch for ch in channels if name.lower() in ch.get('name', '').lower()]
+            if region:
+                channels = [ch for ch in channels if region.lower() in ch.get('group', '').lower() or region.lower() in ch.get('name', '').lower()]
+            if limit > 0:
+                channels = channels[:limit]
+
+            result = {
+                'total': len(channels),
+                'generated_at': api_data.get('generated_at'),
+                'channels': channels,
+            }
+            self._send_json_response(result)
+
+        elif path_part == 'stats':
+            if not stats_file.exists():
+                self._send_json_error(404, 'Stats report not found. Run iptv.py first.')
+                return
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    stats = json.load(f)
+                self._send_json_response(stats)
+            except Exception as e:
+                self._send_json_error(500, f'Failed to read stats: {e}')
+
+        elif path_part == 'groups':
+            if not api_data_file.exists():
+                self._send_json_error(404, 'API data not found. Run iptv.py first.')
+                return
+            try:
+                with open(api_data_file, 'r', encoding='utf-8') as f:
+                    api_data = json.load(f)
+            except Exception as e:
+                self._send_json_error(500, f'Failed to read API data: {e}')
+                return
+
+            groups = {}
+            for ch in api_data.get('channels', []):
+                g = ch.get('group', '其他')
+                if g not in groups:
+                    groups[g] = {'count': 0, 'channels': []}
+                groups[g]['count'] += 1
+                groups[g]['channels'].append(ch.get('name', ''))
+
+            self._send_json_response({
+                'total_groups': len(groups),
+                'generated_at': api_data.get('generated_at'),
+                'groups': groups,
+            })
+
+        elif path_part == 'search':
+            q = query_params.get('q', [''])[0]
+            if not q:
+                self._send_json_error(400, 'Missing query parameter: q')
+                return
+            if not api_data_file.exists():
+                self._send_json_error(404, 'API data not found. Run iptv.py first.')
+                return
+            try:
+                with open(api_data_file, 'r', encoding='utf-8') as f:
+                    api_data = json.load(f)
+            except Exception as e:
+                self._send_json_error(500, f'Failed to read API data: {e}')
+                return
+
+            q_lower = q.lower()
+            results = [
+                ch for ch in api_data.get('channels', [])
+                if q_lower in ch.get('name', '').lower() or q_lower in ch.get('group', '').lower()
+            ]
+            self._send_json_response({
+                'query': q,
+                'total': len(results),
+                'channels': results,
+            })
+
+        else:
+            self._send_json_error(400, f'Unknown API endpoint: {path_part}. Available: channels, stats, groups, search')
+
     def _send_json_response(self, obj):
         data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
         self.send_response(200)
@@ -1853,6 +1962,7 @@ def main():
         print(f'  访问地址: http://127.0.0.1:{port}')
         print(f'  Serving: {serve_dir}')
         print(f'  CORS proxy: /proxy/<encoded_url>')
+        print(f'  IPTV API: /api/channels | /api/stats | /api/groups | /api/search?q=')
         if FFMPEG_PATH:
             print(f'  音频转码: 已启用 (FFmpeg: {FFMPEG_PATH})')
         else:
