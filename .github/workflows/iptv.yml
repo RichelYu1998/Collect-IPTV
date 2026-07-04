@@ -65,6 +65,8 @@ jobs:
           'email_smtp_password': smtp_password,
           'email_from_name': 'IPTV',
           'email_to': email_to,
+          'github_repo': '${{ github.repository }}',
+          'github_branch': '${{ github.ref_name }}',
           'watch_files': [
             'file/best_sorted.m3u',
             'file/best_sorted.m3u8'

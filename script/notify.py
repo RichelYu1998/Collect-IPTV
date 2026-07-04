@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 import os
 import sys
 import json
@@ -23,6 +23,25 @@ PROJECT_ROOT = Path(__file__).parent.parent
 CONFIG_DIR = PROJECT_ROOT / 'config'
 CONFIG_FILE = CONFIG_DIR / 'notify.json'
 HASH_FILE = CONFIG_DIR / '.notify_hashes.json'
+
+
+def _build_subscription_lines(config):
+    repo = config.get('github_repo', 'RichelYu1998/Collect-IPTV')
+    branch = config.get('github_branch', 'main')
+    lines = [
+        '',
+        '═══════════════════════════════════════',
+        '📺 VLC/播放器订阅地址',
+        '═══════════════════════════════════════',
+        f'M3U:    https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u',
+        f'M3U8:   https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u8',
+        f'CDN加速: https://cdn.jsdelivr.net/gh/{repo}@{branch}/file/best_sorted.m3u',
+        f'gh-proxy: https://gh-proxy.com/https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u',
+        '',
+        '使用方法: VLC → 媒体 → 打开网络串流 → 粘贴上方地址',
+        '═══════════════════════════════════════',
+    ]
+    return lines
 
 
 def load_config():
@@ -156,6 +175,7 @@ def send_email_sendgrid(config, changes):
     
     body_lines.append('')
     body_lines.append('请查收附件中的最新直播源文件。')
+    body_lines.extend(_build_subscription_lines(config))
     body_text = '\n'.join(body_lines)
     
     # 准备附件（Base64编码）
@@ -270,6 +290,7 @@ def send_email_resend(config, changes):
     
     body_lines.append('')
     body_lines.append('请查收附件中的最新直播源文件。')
+    body_lines.extend(_build_subscription_lines(config))
     body_text = '\n'.join(body_lines)
     
     # 准备附件
@@ -372,6 +393,7 @@ def send_email_smtp(config, changes):
     
     body_lines.append('')
     body_lines.append('请查收附件中的最新直播源文件。')
+    body_lines.extend(_build_subscription_lines(config))
     body = '\n'.join(body_lines)
 
     msg.attach(MIMEText(body, 'plain', 'utf-8'))

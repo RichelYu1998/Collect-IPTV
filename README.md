@@ -203,6 +203,8 @@ export IPTV_MAX_PARALLEL=300
   "email_smtp_password": "your_auth_code",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
@@ -217,6 +219,8 @@ export IPTV_MAX_PARALLEL=300
   "sendgrid_from_email": "noreply@yourdomain.com",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
@@ -231,6 +235,8 @@ export IPTV_MAX_PARALLEL=300
   "resend_from_email": "onboarding@resend.dev",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```

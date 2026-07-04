@@ -293,6 +293,8 @@ def send_email(config, changes):
   "email_smtp_password": "your_smtp_authorization_code",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
@@ -307,6 +309,8 @@ def send_email(config, changes):
   "sendgrid_from_email": "noreply@yourdomain.com",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
@@ -321,6 +325,8 @@ def send_email(config, changes):
   "resend_from_email": "onboarding@resend.dev",
   "email_from_name": "IPTV直播源监控",
   "email_to": "recipient@example.com",
+  "github_repo": "RichelYu1998/Collect-IPTV",
+  "github_branch": "main",
   "watch_files": ["file/best_sorted.m3u", "file/best_sorted.m3u8"]
 }
 ```
@@ -333,6 +339,7 @@ def send_email(config, changes):
 - SendGrid/Resend 通过 HTTPS API 发送，绕过 SMTP 端口封锁
 - 时区：`_CST = timezone(timedelta(hours=8))`，邮件时间戳使用 UTC+8
 - 变更状态通过 `.notify_hashes.json` 持久化
+- **VLC订阅地址**：邮件正文自动包含VLC/播放器订阅地址（由 `_build_subscription_lines()` 生成，基于 `github_repo` 和 `github_branch` 配置）
 
 ### 5.5 GitHub Actions 邮件配置注入
 
