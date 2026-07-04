@@ -550,6 +550,14 @@ on:
 4. `git push origin main`
 
 **版本号同步**：版本号唯一来源为 `README.md`，格式 `### v1.2.3 (YYYY-MM-DD)`，两个文件的版本号和更新日期必须保持一致。
+
+### Lint/检查命令
+
+```bash
+python -c "import ast; ast.parse(open('.github/workflows/iptv.py', encoding='utf-8').read()); print('OK')"
+python -c "import ast; ast.parse(open('server.py', encoding='utf-8').read()); print('OK')"
+```
+
 ## FFmpeg 多平台支持
 
 ### 预编译二进制文件位置

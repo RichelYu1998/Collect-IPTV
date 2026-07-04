@@ -604,6 +604,25 @@ crontab -l | grep iptv
 
 **版本号同步**：版本号唯一来源为 `README.md`，格式 `### v1.2.3 (YYYY-MM-DD)`，两个文件的版本号和更新日期必须保持一致。
 
+### 代码规范
+
+| 项目 | 规范 |
+|------|------|
+| 缩进 | 4 空格 |
+| 字符串 | 优先 f-string 格式化 |
+| 编码 | UTF-8，读写始终指定 `encoding='utf-8'` |
+| JSON | 2 空格缩进，`ensure_ascii=False` |
+| 路径 | Python 用 `pathlib.Path` |
+| 异步 | `aiohttp` + `asyncio` |
+| 环境变量 | `os.environ.get()` + 默认值 |
+
+### Lint/检查命令
+
+```bash
+python -c "import ast; ast.parse(open('.github/workflows/iptv.py', encoding='utf-8').read()); print('OK')"
+python -c "import ast; ast.parse(open('server.py', encoding='utf-8').read()); print('OK')"
+```
+
 ## 📧 联系方式
 
 如有问题或建议，请通过以下方式联系：
