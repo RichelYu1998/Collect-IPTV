@@ -129,6 +129,21 @@ jobs:
           exit 1
         fi
         
+    - name: Purge jsDelivr CDN cache
+      if: success()
+      run: |
+        echo "=== Purging jsDelivr CDN cache ==="
+        REPO="${{ github.repository }}"
+        BRANCH="${{ github.ref_name }}"
+        FILES=("file/best_sorted.m3u" "file/best_sorted.m3u8" "file/best_sorted.txt" "file/best_sorted_gh-proxy.m3u" "file/best_sorted_ghproxy-mirror.m3u" "file/api_data.json" "file/stats_report.json")
+        for f in "${FILES[@]}"; do
+          PURGE_URL="https://purge.jsdelivr.net/gh/${REPO}@${BRANCH}/${f}"
+          echo "Purging: ${PURGE_URL}"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${PURGE_URL}")
+          echo "Response: ${HTTP_CODE}"
+        done
+        echo "=== CDN cache purge complete ==="
+
     - name: Send email notification
       run: |
         echo "=== Send email notification ==="
