@@ -28,19 +28,34 @@ HASH_FILE = CONFIG_DIR / '.notify_hashes.json'
 def _build_subscription_lines(config):
     repo = config.get('github_repo', 'RichelYu1998/Collect-IPTV')
     branch = config.get('github_branch', 'main')
+    
+    files = [
+        ('best_sorted.m3u', 'M3U'),
+        ('best_sorted.m3u8', 'M3U8'),
+        ('best_sorted.txt', 'TXT'),
+        ('best_sorted_gh-proxy.m3u', 'M3U (gh-proxy)'),
+        ('best_sorted_ghproxy-mirror.m3u', 'M3U (ghproxy-mirror)')
+    ]
+    
     lines = [
         '',
         '═══════════════════════════════════════',
         '📺 VLC/播放器订阅地址',
         '═══════════════════════════════════════',
-        f'M3U:    https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u',
-        f'M3U8:   https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u8',
-        f'CDN加速: https://cdn.jsdelivr.net/gh/{repo}@{branch}/file/best_sorted.m3u',
-        f'gh-proxy: https://gh-proxy.com/https://raw.githubusercontent.com/{repo}/{branch}/file/best_sorted.m3u',
+    ]
+    
+    for filename, display_name in files:
+        lines.append(f'')
+        lines.append(f'【{display_name}】')
+        lines.append(f'  原始地址: https://raw.githubusercontent.com/{repo}/{branch}/file/{filename}')
+        lines.append(f'  CDN加速:  https://cdn.jsdelivr.net/gh/{repo}@{branch}/file/{filename}')
+        lines.append(f'  gh-proxy: https://gh-proxy.com/https://raw.githubusercontent.com/{repo}/{branch}/file/{filename}')
+    
+    lines.extend([
         '',
         '使用方法: VLC → 媒体 → 打开网络串流 → 粘贴上方地址',
         '═══════════════════════════════════════',
-    ]
+    ])
     return lines
 
 
