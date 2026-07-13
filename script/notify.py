@@ -92,8 +92,40 @@ def file_hash(filepath):
     return h.hexdigest()
 
 
+def get_file_folder_files():
+    """获取/file文件夹中的所有主要文件"""
+    file_dir = PROJECT_ROOT / 'file'
+    if not file_dir.exists():
+        return []
+    
+    exclude_files = {
+        '.cdn_cache.json',
+        '.source_cache.json',
+        '.stream_cache.json',
+        'bat_error.txt',
+        'bat_output.txt',
+        'bat_test_error.txt',
+        'bat_test_output.txt'
+    }
+    
+    main_files = []
+    
+    for fpath in file_dir.iterdir():
+        if fpath.is_file():
+            fname = fpath.name
+            if fname in exclude_files:
+                continue
+            if fname.startswith('.'):
+                continue
+            main_files.append(f'file/{fname}')
+    
+    return sorted(main_files)
+
 def detect_changes(config):
-    watch_files = config.get('watch_files', ['file/best_sorted.m3u', 'file/best_sorted.m3u8'])
+    watch_files = config.get('watch_files', [])
+    if not watch_files:
+        watch_files = get_file_folder_files()
+    
     old_hashes = load_hashes()
     new_hashes = {}
     changes = []
@@ -161,14 +193,16 @@ def send_email_sendgrid(config, changes):
         tag = '新增' if c['type'] == 'new' else '变更'
         body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
     
+    # 获取/file文件夹中的所有主要文件作为附件
+    all_files = get_file_folder_files()
     attachment_files = []
-    for c in changes:
-        filepath = c.get('filepath', '')
-        if filepath and os.path.exists(filepath):
-            attachment_files.append(filepath)
+    for fname in all_files:
+        filepath = PROJECT_ROOT / fname
+        if filepath.exists():
+            attachment_files.append(str(filepath))
     
     body_lines.append('')
-    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    body_lines.append(f'已将/file文件夹中的所有文件作为附件发送（共{len(attachment_files)}个文件）:')
     for fpath in attachment_files:
         fname = os.path.basename(fpath)
         body_lines.append(f'  - {fname}')
@@ -276,14 +310,16 @@ def send_email_resend(config, changes):
         tag = '新增' if c['type'] == 'new' else '变更'
         body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
     
+    # 获取/file文件夹中的所有主要文件作为附件
+    all_files = get_file_folder_files()
     attachment_files = []
-    for c in changes:
-        filepath = c.get('filepath', '')
-        if filepath and os.path.exists(filepath):
-            attachment_files.append(filepath)
+    for fname in all_files:
+        filepath = PROJECT_ROOT / fname
+        if filepath.exists():
+            attachment_files.append(str(filepath))
     
     body_lines.append('')
-    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    body_lines.append(f'已将/file文件夹中的所有文件作为附件发送（共{len(attachment_files)}个文件）:')
     for fpath in attachment_files:
         fname = os.path.basename(fpath)
         body_lines.append(f'  - {fname}')
@@ -379,14 +415,16 @@ def send_email_smtp(config, changes):
         tag = '新增' if c['type'] == 'new' else '变更'
         body_lines.append(f'[{tag}] {c["file"]} - {c["detail"]}')
     
+    # 获取/file文件夹中的所有主要文件作为附件
+    all_files = get_file_folder_files()
     attachment_files = []
-    for c in changes:
-        filepath = c.get('filepath', '')
-        if filepath and os.path.exists(filepath):
-            attachment_files.append(filepath)
+    for fname in all_files:
+        filepath = PROJECT_ROOT / fname
+        if filepath.exists():
+            attachment_files.append(str(filepath))
     
     body_lines.append('')
-    body_lines.append(f'已将变更的文件作为附件发送（共{len(attachment_files)}个文件）:')
+    body_lines.append(f'已将/file文件夹中的所有文件作为附件发送（共{len(attachment_files)}个文件）:')
     for fpath in attachment_files:
         fname = os.path.basename(fpath)
         body_lines.append(f'  - {fname}')
@@ -453,7 +491,10 @@ def send_email_smtp(config, changes):
 
 def check_and_notify(config):
     """检测变更并发送邮件（含附件）- 首次或变化即发送"""
-    watch_files = config.get('watch_files', ['file/best_sorted.m3u', 'file/best_sorted.m3u8'])
+    watch_files = config.get('watch_files', [])
+    if not watch_files:
+        watch_files = get_file_folder_files()
+    
     old_hashes = load_hashes()
     
     is_first_run = (not old_hashes or len(old_hashes) == 0)

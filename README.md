@@ -661,12 +661,14 @@ Made with ❤️ by Collect-IPTV Team
 
 #### 📺 VLC/播放器订阅地址
 
-| 格式 | 地址 |
-|------|------|
-| M3U | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` |
-| M3U8 | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u8` |
-| CDN加速 | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted.m3u` |
-| gh-proxy | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` |
+所有文件均包含 EPG 节目单地址（`url-tvg`），播放器可自动加载节目单。
+
+| 文件 | 原始地址 | CDN加速 | gh-proxy |
+|------|---------|---------|----------|
+| **M3U** | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted.m3u` | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u` |
+| **M3U8** | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u8` | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted.m3u8` | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted.m3u8` |
+| **M3U (gh-proxy)** | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted_gh-proxy.m3u` | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted_gh-proxy.m3u` | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted_gh-proxy.m3u` |
+| **M3U (ghproxy-mirror)** | `https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted_ghproxy-mirror.m3u` | `https://cdn.jsdelivr.net/gh/RichelYu1998/Collect-IPTV@main/file/best_sorted_ghproxy-mirror.m3u` | `https://gh-proxy.com/https://raw.githubusercontent.com/RichelYu1998/Collect-IPTV/main/file/best_sorted_ghproxy-mirror.m3u` |
 
 #### 🔄 多仓库同步配置
 
