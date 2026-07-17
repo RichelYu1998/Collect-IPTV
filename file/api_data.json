@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-07-17 02:29:28 UTC",
-  "total": 453,
+  "generated_at": "2026-07-17 06:13:14 UTC",
+  "total": 435,
   "channels": [
     {
-      "name": "CCTV1",
-      "url": "http://74.91.26.218:82/live/cctv1hd.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/CCTV1.png",
+      "name": "CCTV-1",
+      "url": "http://69.30.245.50/live/cctv1.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CCTV-1.png",
       "group": "央视频道",
       "latency_ms": null
     },
@@ -18,21 +18,21 @@
     },
     {
       "name": "CCTV-3",
-      "url": "http://69.30.245.50/live/cctv3.m3u8",
+      "url": "http://198.204.228.26/live/cctv3hd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CCTV-3.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-4",
-      "url": "http://107.150.60.122/live/cctv4hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv4k.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-4.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-5",
-      "url": "http://198.204.228.26/live/cctv5hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv5p.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-5.png",
       "group": "央视频道",
       "latency_ms": null
@@ -46,70 +46,70 @@
     },
     {
       "name": "CCTV-6",
-      "url": "http://69.30.245.50/live/cctv6.m3u8",
+      "url": "http://198.204.228.26/live/cctv6hd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CCTV-6.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-7",
-      "url": "http://69.30.245.50/live/cctv7.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqbv/cctv7hd.m3u8?auth=test20251009",
       "logo": "https://live.fanmingming.cn/tv/CCTV-7.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-8",
-      "url": "http://74.91.26.218:82/live/cctv8hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqbv/cctv8hd.m3u8?auth=test20251009",
       "logo": "https://live.fanmingming.cn/tv/CCTV-8.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-9",
-      "url": "http://192.151.150.154/live/cctv9hd.m3u8",
+      "url": "http://198.204.228.26/live/cctv9hd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CCTV-9.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-10",
-      "url": "http://69.30.245.50/live/cctv10.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqbv/cctv10hd.m3u8?auth=test20251009",
       "logo": "https://live.fanmingming.cn/tv/CCTV-10.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-11",
-      "url": "http://74.91.26.218:82/live/cctv11hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv11hd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-11.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-12",
-      "url": "http://74.91.26.218:82/live/cctv12hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv12hd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-12.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-13",
-      "url": "http://63.141.230.178:82/gslb/zbdq5.m3u8?id=cctv13hd",
+      "url": "http://74.91.26.218:82/live/cctv13hd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CCTV-13.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-14",
-      "url": "http://204.12.221.218:8181/3m1080p/cctv14.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv14hd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-14.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CCTV-15",
-      "url": "http://198.204.228.26/live/cctv15hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv15hd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-15.png",
       "group": "央视频道",
       "latency_ms": null
@@ -123,8 +123,29 @@
     },
     {
       "name": "CCTV-17",
-      "url": "http://74.91.26.218:82/live/cctv17hd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cctv17hd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CCTV-17.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "CCTV世界地理",
+      "url": "https://shcm-stream-cf1.stream.264788.xyz/cms001/ch00000090990000001620/index.m3u8?streamid=8a034b40397504e25b3775c772237996&streamkey=01vY5fRxC8VyKg4oq30vfikHXTCAKySLP29l6OG91kQlzDttHgzNLkUw5kivm3PfNsVHJv5FgdsPBYFYI2IWpt7tfRCuFHqLT2pvX67ubMds8jl2DHtvOh0&token=1775754349-4f33f4f84a4abeba-0-91687dc8c9325092efa1d00f330d2710",
+      "logo": "https://live.fanmingming.cn/tv/CCTV世界地理.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "CCTV风云足球",
+      "url": "https://epg.pw/stream/ac8062ec9484078061d3bef507c15a423ac57ae4144e3fcc4b0a198dd420f911.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CCTV风云足球.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "CGTN",
+      "url": "https://0472.org/hls/cgtn.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CGTN.png",
       "group": "央视频道",
       "latency_ms": null
     },
@@ -132,6 +153,13 @@
       "name": "CGTN俄语",
       "url": "http://russian-livews.cgtn.com/hls/LSvexABhNipibK5KRuUkvHZ7220802LSTeze9o8tdFXMHsb1VosgoT220802cd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CGTN俄语.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "CGTN法语",
+      "url": "https://0472.org/hls/cgtnf.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CGTN法语.png",
       "group": "央视频道",
       "latency_ms": null
     },
@@ -150,15 +178,29 @@
       "latency_ms": null
     },
     {
+      "name": "CGTN西语",
+      "url": "https://0472.org/hls/cgtnx.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CGTN西语.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "CGTN阿语",
+      "url": "https://0472.org/hls/cgtna.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/CGTN阿语.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
       "name": "CHC动作电影",
-      "url": "http://198.204.228.26/live/chcdz.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/chcdz.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CHC动作电影.png",
       "group": "央视频道",
       "latency_ms": null
     },
     {
       "name": "CHC家庭影院",
-      "url": "http://198.204.228.26/live/chcjt.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/chcjt.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/CHC家庭影院.png",
       "group": "央视频道",
       "latency_ms": null
@@ -167,6 +209,20 @@
       "name": "中国交通",
       "url": "http://drive.mxmy.net:8888/udp/239.3.1.188:8001",
       "logo": "https://live.fanmingming.cn/tv/中国交通.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "支持作者",
+      "url": "https://vd2.bdstatic.com/mda-sctj0f6r4u1bpebc/1080p/cae_h264/1774706523506678171/mda-sctj0f6r4u1bpebc.mp4",
+      "logo": "https://live.fanmingming.cn/tv/支持作者.png",
+      "group": "央视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "熊猫直播",
+      "url": "https://gcwbndali.v.myalicdn.com/gcwbnd/ipanda1000_2/index.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/熊猫直播.png",
       "group": "央视频道",
       "latency_ms": null
     },
@@ -186,7 +242,7 @@
     },
     {
       "name": "三沙卫视",
-      "url": "http://107.150.60.122/live/ssws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/ssws.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/三沙卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -200,21 +256,28 @@
     },
     {
       "name": "东南卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/dnws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/dnwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/东南卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "东方卫视",
-      "url": "http://107.150.60.122/live/dfwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/dfwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/东方卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
+      "name": "东方卫视4K",
+      "url": "https://bp-resource-dfl.bestv.cn/148/3/video.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/东方卫视4K.png",
+      "group": "卫视频道",
+      "latency_ms": null
+    },
+    {
       "name": "云南卫视",
-      "url": "http://198.204.228.26/live/ynwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/ynwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/云南卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -235,7 +298,7 @@
     },
     {
       "name": "内蒙古卫视",
-      "url": "http://198.204.228.26/live/nmgws.m3u8",
+      "url": "http://107.150.60.122/live/nmgws.m3u8",
       "logo": "https://live.fanmingming.cn/tv/内蒙古卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -255,15 +318,8 @@
       "latency_ms": null
     },
     {
-      "name": "凤凰卫视台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=fhzw",
-      "logo": "https://live.fanmingming.cn/tv/凤凰卫视台.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
       "name": "北京卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/bjws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/bjwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/北京卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -277,14 +333,14 @@
     },
     {
       "name": "吉林卫视",
-      "url": "http://192.151.150.154/live/jlwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/jlwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/吉林卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "四川卫视",
-      "url": "http://198.204.228.26/live/scwshd.m3u8",
+      "url": "http://204.12.221.218:8181/3m1080p/scws.m3u8",
       "logo": "https://live.fanmingming.cn/tv/四川卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -305,49 +361,49 @@
     },
     {
       "name": "宁夏卫视",
-      "url": "http://192.151.150.154/live/nxws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/nxws.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/宁夏卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
+      "name": "安多卫视",
+      "url": "https://liveout.xntv.tv/a65jur/96iln2.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/安多卫视.png",
+      "group": "卫视频道",
+      "latency_ms": null
+    },
+    {
       "name": "安徽卫视",
-      "url": "http://107.150.60.122/live/ahwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/ahwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/安徽卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "山东卫视",
-      "url": "http://192.151.150.154/live/sdwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/sdwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/山东卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
-      "name": "山东教育",
-      "url": "https://test1.live.sdetv.com.cn/live/dianshizhibo/playlist.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/山东教育.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
       "name": "山西卫视",
-      "url": "http://107.150.60.122/live/sxwshd.m3u8",
+      "url": "http://119.39.9.8:9901/tsfile/live/0118_1.m3u8",
       "logo": "https://live.fanmingming.cn/tv/山西卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "广东卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/gdws.m3u8",
+      "url": "https://txmov2.a.kwimgs.com/upic/2023/01/26/09/BMjAyMzAxMjYwOTE3NDVfNzM5MzQzNzIyXzk0NjI1OTUwNTA3XzBfMw==_b_B81ddda927d33445d544befd008e60109.mp4",
       "logo": "https://live.fanmingming.cn/tv/广东卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "广西卫视",
-      "url": "http://198.204.228.26/live/gxwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/gxwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/广西卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -361,42 +417,42 @@
     },
     {
       "name": "新疆卫视",
-      "url": "http://107.150.60.122/live/xjws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/xjws.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/新疆卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "江苏卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/jsws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqbv/jswshd.m3u8?auth=test20251009",
       "logo": "https://live.fanmingming.cn/tv/江苏卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "江西卫视",
-      "url": "http://192.151.150.154/live/jxwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/jxwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/江西卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "河北卫视",
-      "url": "http://173.208.212.130:8181/720p/hews.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/hewshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/河北卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "河南卫视",
-      "url": "http://173.208.212.130:8181/720p/haws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/hawshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/河南卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "浙江卫视",
-      "url": "http://173.208.212.130:8181/720p/zjws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/zjwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/浙江卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -417,36 +473,22 @@
     },
     {
       "name": "深圳卫视",
-      "url": "http://198.204.228.26/live/szwshd.m3u8",
+      "url": "http://107.150.60.122/live/szwshd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/深圳卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "湖北卫视",
-      "url": "http://198.204.228.26/live/hbwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/hbwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/湖北卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "湖南卫视",
-      "url": "http://74.91.26.218:82/live/hnwshd.m3u8",
+      "url": "http://204.12.221.218:8181/3m1080p/hnws.m3u8",
       "logo": "https://live.fanmingming.cn/tv/湖南卫视.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
-      "name": "湖南卫视4K",
-      "url": "http://8.138.7.223/tv/api.php?id=hnws4k",
-      "logo": "https://live.fanmingming.cn/tv/湖南卫视4K.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
-      "name": "澳门卫视",
-      "url": "http://php.jdshipin.com:8880/TVOD/iptv.php?id=as",
-      "logo": "https://live.fanmingming.cn/tv/澳门卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
@@ -454,6 +496,13 @@
       "name": "甘肃卫视",
       "url": "http://38.75.136.137:98/gslb/dsdqpub/gswshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/甘肃卫视.png",
+      "group": "卫视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "苏州4K",
+      "url": "https://tylive.kan0512.com/norecord/csztv4k_4k.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/苏州4K.png",
       "group": "卫视频道",
       "latency_ms": null
     },
@@ -466,49 +515,42 @@
     },
     {
       "name": "贵州卫视",
-      "url": "http://107.150.60.122/live/gzwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/gzwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/贵州卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "辽宁卫视",
-      "url": "http://198.204.228.26/live/lnwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/lnwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/辽宁卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "重庆卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/cqws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/cqwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/重庆卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "陕西卫视",
-      "url": "http://192.151.150.154/live/snwshd.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/snwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/陕西卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
       "name": "青海卫视",
-      "url": "http://107.150.60.122/live/qhws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/qhws.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/青海卫视.png",
       "group": "卫视频道",
       "latency_ms": null
     },
     {
-      "name": "香港卫视",
-      "url": "http://cctvtxyh5c.liveplay.myqcloud.com/cstv/xianggangweishi_2/index.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/香港卫视.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
       "name": "黑龙江卫视",
-      "url": "http://204.12.221.218:8181/3m1080p/hljws.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/hljwshd.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/黑龙江卫视.png",
       "group": "卫视频道",
       "latency_ms": null
@@ -521,15 +563,8 @@
       "latency_ms": null
     },
     {
-      "name": "东方影视",
-      "url": "https://www.freetv.top/migu/617290047.m3u8?migutoken=86c02ad0875d5cc49d77bcc8bdb628f2c9d508ffc323b964a03c8f92dde4afafa0345cf5a8fefbdf915c748e3d11c6c18e27ae1e21a609cec31a45e6c437db26a7a243625f9cf35c271171a22c",
-      "logo": "https://live.fanmingming.cn/tv/东方影视.png",
-      "group": "上海频道",
-      "latency_ms": null
-    },
-    {
       "name": "第一财经",
-      "url": "http://8.138.7.223/tv/shtv.php?id=dycj",
+      "url": "http://satellitepull.cnr.cn/live/wx32dycjgb/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/第一财经.png",
       "group": "上海频道",
       "latency_ms": null
@@ -571,7 +606,7 @@
     },
     {
       "name": "浙江经济生活",
-      "url": "http://ali-m-l.cztv.com/channels/lantian/channel03/1080p.m3u8#https://ali-m-l.cztv.com/channels/lantian/channel003/1080p.m3u8#http://ali-m-l.cztv.com/channels/lantian/channel003/1080p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXxiaoshan2/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江经济生活.png",
       "group": "内蒙频道",
       "latency_ms": null
@@ -606,8 +641,15 @@
     },
     {
       "name": "北京新闻",
-      "url": "https://satellitepull.cnr.cn/live/wxbjxwgb/playlist.m3u8",
+      "url": "https://ls.qingting.fm/live/339/64k.m3u8",
       "logo": "https://live.fanmingming.cn/tv/北京新闻.png",
+      "group": "北京频道",
+      "latency_ms": null
+    },
+    {
+      "name": "卡酷少儿",
+      "url": "http://218.13.170.98:9901/tsfile/live/1021_1.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/卡酷少儿.png",
       "group": "北京频道",
       "latency_ms": null
     },
@@ -619,17 +661,17 @@
       "latency_ms": null
     },
     {
-      "name": "优漫卡通",
-      "url": "https://www.freetv.top/migu/626064703.m3u8?migutoken=deac6c5275081b54ad412a195e499b7c0cb8f04446b6c80aaa9d3eb1063d620261c68202d59aea05060007b58a62d5d208f16379d861d6f1627c10c9dd894f0bf7e3ca97b04696255e193e871c",
-      "logo": "https://live.fanmingming.cn/tv/优漫卡通.png",
-      "group": "卫视频道",
-      "latency_ms": null
-    },
-    {
       "name": "金鹰卡通",
       "url": "http://183.11.239.36:808/hls/69/index.m3u8",
       "logo": "https://live.fanmingming.cn/tv/金鹰卡通.png",
       "group": "卫视频道",
+      "latency_ms": null
+    },
+    {
+      "name": "九台",
+      "url": "http://stream10.jlntv.cn/jiutaitv/sd/live.m3u8?zjild",
+      "logo": "https://live.fanmingming.cn/tv/九台.png",
+      "group": "吉林频道",
       "latency_ms": null
     },
     {
@@ -640,9 +682,9 @@
       "latency_ms": null
     },
     {
-      "name": "河南乡村",
-      "url": "http://1.94.31.214/php/hntv.php?id=hnxc",
-      "logo": "https://live.fanmingming.cn/tv/河南乡村.png",
+      "name": "桦甸",
+      "url": "http://stream10.jlntv.cn/huadian/sd/live.m3u8?zjild",
+      "logo": "https://live.fanmingming.cn/tv/桦甸.png",
       "group": "吉林频道",
       "latency_ms": null
     },
@@ -718,8 +760,15 @@
     },
     {
       "name": "广安公共",
-      "url": "http://live1.gatv.com.cn:85/live/GGPD_ggpdzm.m3u8",
+      "url": "http://live1.gatv.com.cn:85/live/GGPD.m3u8",
       "logo": "https://live.fanmingming.cn/tv/广安公共.png",
+      "group": "四川频道",
+      "latency_ms": null
+    },
+    {
+      "name": "旺苍新闻综合",
+      "url": "http://live.spccmc.com:90/live/spxwzh.m3u8?%E5%85%B3%E6%B3%A8%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7[%E6%99%B4%E5%9B%AD]",
+      "logo": "https://live.fanmingming.cn/tv/旺苍新闻综合.png",
       "group": "四川频道",
       "latency_ms": null
     },
@@ -795,7 +844,7 @@
     },
     {
       "name": "河北农民",
-      "url": "https://ls.qingting.fm/live/1650/64k.m3u8",
+      "url": "http://ls.qingting.fm/live/1650.m3u8",
       "logo": "https://live.fanmingming.cn/tv/河北农民.png",
       "group": "天津频道",
       "latency_ms": null
@@ -819,6 +868,20 @@
       "url": "http://file.ysxtv.cn/cms/videos/nmip-media/channellive/channel4/playlist.m3u8?zsicd#http://file.ysxtv.cn/cms/videos/nmip-media/channellive/channel4/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/营山电视台.png",
       "group": "宁夏频道",
+      "latency_ms": null
+    },
+    {
+      "name": "亳州农村",
+      "url": "http://zbbf2.ahbztv.com/live/418.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/亳州农村.png",
+      "group": "安徽频道",
+      "latency_ms": null
+    },
+    {
+      "name": "亳州新闻",
+      "url": "http://zbbf2.ahbztv.com/live/416.m3u8?zanhd",
+      "logo": "https://live.fanmingming.cn/tv/亳州新闻.png",
+      "group": "安徽频道",
       "latency_ms": null
     },
     {
@@ -865,7 +928,7 @@
     },
     {
       "name": "广西国际",
-      "url": "http://107.150.60.122/live/gxgj.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/gxgj.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/广西国际.png",
       "group": "安徽频道",
       "latency_ms": null
@@ -879,9 +942,37 @@
     },
     {
       "name": "浙江国际",
-      "url": "http://ali-m-l.cztv.com/channels/lantian/channel010/1080p.m3u8",
+      "url": "http://ali-m-l.cztv.com/channels/lantian/channel010/1080p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/浙江国际.png",
       "group": "安徽频道",
+      "latency_ms": null
+    },
+    {
+      "name": "祁门综合",
+      "url": "http://zbbf2.ahbztv.com/live/416.m3u8?zanhd",
+      "logo": "https://live.fanmingming.cn/tv/祁门综合.png",
+      "group": "安徽频道",
+      "latency_ms": null
+    },
+    {
+      "name": "铜陵新闻综合",
+      "url": "https://ls.qingting.fm/live/21303/64k.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/铜陵新闻综合.png",
+      "group": "安徽频道",
+      "latency_ms": null
+    },
+    {
+      "name": "黄山公共生活",
+      "url": "http://hslive.hsnewsnet.com/lsdream/iY92ady/1000/live.m3u8?zanhd",
+      "logo": "https://live.fanmingming.cn/tv/黄山公共生活.png",
+      "group": "安徽频道",
+      "latency_ms": null
+    },
+    {
+      "name": "山东教育",
+      "url": "https://test1.live.sdetv.com.cn/live/dianshizhibo/playlist.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/山东教育.png",
+      "group": "山东频道",
       "latency_ms": null
     },
     {
@@ -910,6 +1001,13 @@
       "url": "https://qmmqvzoz.live.sxmty.com/live/hls/f24f8a390c084386a564074c9260100c/be3fdf07606145739ab2c4b80fe0136a.m3u8?zshanxd",
       "logo": "https://live.fanmingming.cn/tv/汾西综合.png",
       "group": "山西频道",
+      "latency_ms": null
+    },
+    {
+      "name": "东莞新闻综合",
+      "url": "https://stream.sun0769.com/dgrtv1/mp4tv1_800/index.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/东莞新闻综合.png",
+      "group": "广东频道",
       "latency_ms": null
     },
     {
@@ -977,8 +1075,22 @@
     },
     {
       "name": "广州综合",
-      "url": "http://r.jdshipin.com/iR6Gq",
+      "url": "http://tencentplay.gztv.com/live/zonghes.m3u8?txSecret=c8dbe86d6f86eb1a21999ab479fd5667&txTime=18d3c4690e8",
       "logo": "https://live.fanmingming.cn/tv/广州综合.png",
+      "group": "广东频道",
+      "latency_ms": null
+    },
+    {
+      "name": "河源公共",
+      "url": "http://tmpstream.hyrtv.cn/hygg/sd/live.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/河源公共.png",
+      "group": "广东频道",
+      "latency_ms": null
+    },
+    {
+      "name": "河源综合",
+      "url": "http://tmpstream.hyrtv.cn/xwzh/sd/live.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/河源综合.png",
       "group": "广东频道",
       "latency_ms": null
     },
@@ -1005,7 +1117,7 @@
     },
     {
       "name": "广西新闻",
-      "url": "http://192.151.150.154/live/gxxw.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/gxxw.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/广西新闻.png",
       "group": "广西频道",
       "latency_ms": null
@@ -1019,7 +1131,7 @@
     },
     {
       "name": "象山综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXxiangshan1/720p.m3u8?zzhed",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXxiangshan1/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/象山综合.png",
       "group": "广西频道",
       "latency_ms": null
@@ -1033,7 +1145,7 @@
     },
     {
       "name": "伊犁经济法制",
-      "url": "http://110.153.180.106:55555/out_4/index.m3u8",
+      "url": "http://110.153.180.106:55555/out_4/index.m3u8?zxinjd",
       "logo": "https://live.fanmingming.cn/tv/伊犁经济法制.png",
       "group": "新疆频道",
       "latency_ms": null
@@ -1095,30 +1207,9 @@
       "latency_ms": null
     },
     {
-      "name": "新沂新闻",
-      "url": "http://live.xysrmt.cn/xwzh/sd/live.m3u8?zjiangsd\"",
-      "logo": "https://live.fanmingming.cn/tv/新沂新闻.png",
-      "group": "江苏频道",
-      "latency_ms": null
-    },
-    {
-      "name": "新沂生活",
-      "url": "http://live.xysrmt.cn/shpd/sd/live.m3u8?zjiangsd",
-      "logo": "https://live.fanmingming.cn/tv/新沂生活.png",
-      "group": "江苏频道",
-      "latency_ms": null
-    },
-    {
       "name": "浙江钱江都市",
       "url": "https://ali-m-l.cztv.com/channels/lantian/channel002/1080p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江钱江都市.png",
-      "group": "江苏频道",
-      "latency_ms": null
-    },
-    {
-      "name": "苏州4K",
-      "url": "https://live-auth.51kandianshi.com/szgd/csztv4k_hd.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/苏州4K.png",
       "group": "江苏频道",
       "latency_ms": null
     },
@@ -1200,6 +1291,13 @@
       "latency_ms": null
     },
     {
+      "name": "滦平新闻",
+      "url": "http://jwplay.hebyun.com.cn/live/LPTV001/1500k/tzwj_video.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/滦平新闻.png",
+      "group": "河北频道",
+      "latency_ms": null
+    },
+    {
       "name": "衡水公共",
       "url": "http://ls.qingting.fm/live/2810.m3u8",
       "logo": "https://live.fanmingming.cn/tv/衡水公共.png",
@@ -1217,6 +1315,13 @@
       "name": "邢台综合",
       "url": "http://jwplay.hebyun.com.cn/live/xtsrmtzs/1500k/tzwj_video.m3u8",
       "logo": "https://live.fanmingming.cn/tv/邢台综合.png",
+      "group": "河北频道",
+      "latency_ms": null
+    },
+    {
+      "name": "邯郸公共",
+      "url": "https://jwcdnqx.hebyun.com.cn/live/hdgg/1500k/tzwj_video.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/邯郸公共.png",
       "group": "河北频道",
       "latency_ms": null
     },
@@ -1242,23 +1347,16 @@
       "latency_ms": null
     },
     {
+      "name": "邯郸科教",
+      "url": "https://jwcdnqx.hebyun.com.cn/live/hdkj/1500k/tzwj_video.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/邯郸科教.png",
+      "group": "河北频道",
+      "latency_ms": null
+    },
+    {
       "name": "梨园",
       "url": "https://dxtx.hntv.tv/live/lypd.m3u8?txSecret=10c771842a0be59e8b575d765173ec96&txTime=7B923E0A&wsSecret=41543190cdf375f1c73207222bb96542&wsTime=1769313549",
       "logo": "https://live.fanmingming.cn/tv/梨园.png",
-      "group": "河南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "河南公共",
-      "url": "http://1.94.31.214/php/hntv.php?id=hngg",
-      "logo": "https://live.fanmingming.cn/tv/河南公共.png",
-      "group": "河南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "河南新闻",
-      "url": "http://1.94.31.214/php/hntv.php?id=hnxw",
-      "logo": "https://live.fanmingming.cn/tv/河南新闻.png",
       "group": "河南频道",
       "latency_ms": null
     },
@@ -1270,22 +1368,8 @@
       "latency_ms": null
     },
     {
-      "name": "河南民生",
-      "url": "http://www.lwfz.fun:8800/rtp/239.16.20.165:11650",
-      "logo": "https://live.fanmingming.cn/tv/河南民生.png",
-      "group": "河南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "河南法治",
-      "url": "http://1.94.31.214/php/hntv.php?id=hmfz",
-      "logo": "https://live.fanmingming.cn/tv/河南法治.png",
-      "group": "河南频道",
-      "latency_ms": null
-    },
-    {
       "name": "河南都市",
-      "url": "http://www.lwfz.fun:8800/rtp/239.16.20.164:11640",
+      "url": "http://1.94.31.214/php/hntv.php?id=hnds",
       "logo": "https://live.fanmingming.cn/tv/河南都市.png",
       "group": "河南频道",
       "latency_ms": null
@@ -1309,20 +1393,6 @@
       "url": "http://1.94.31.214/php/hntv.php?id=jczy",
       "logo": "https://live.fanmingming.cn/tv/睛彩中原.png",
       "group": "河南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "上虞文化影院",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXshangyu2/720p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/上虞文化影院.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
-      "name": "上虞新商都",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXshangyu3/720p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/上虞新商都.png",
-      "group": "浙江频道",
       "latency_ms": null
     },
     {
@@ -1362,21 +1432,21 @@
     },
     {
       "name": "余姚姚江文化",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXyuyao3/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXyuyao3/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/余姚姚江文化.png",
       "group": "浙江频道",
       "latency_ms": null
     },
     {
       "name": "余姚新闻综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXyuyao1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXyuyao1/720p.m3u8?cWlkPSZzPTg3OWMwYmMyZDMzYTFhZGY3NDQxMjgyYTg1MmUzNTY0JmVzPTE3MDY2Nzc4NzMmdXVpZD0yMjdiY2MzNGNiNGY0MThlYjRiY2IxYzcwNmZjODNkMS02NzQ3NDY2NyZ2PTImYXM9MCZjZG5leF9pZD10eF9waG9uZV9saXZl",
       "logo": "https://live.fanmingming.cn/tv/余姚新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
     },
     {
       "name": "余姚综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXyuyao1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXyuyao1/720p.m3u8?",
       "logo": "https://live.fanmingming.cn/tv/余姚综合.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1411,7 +1481,7 @@
     },
     {
       "name": "嵊州新闻综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXshengzhou1/720p.m3u8?zzhed#http://l.cztvcloud.com/channels/lantian/SXshengzhou1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXshengzhou1/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/嵊州新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1424,15 +1494,8 @@
       "latency_ms": null
     },
     {
-      "name": "平湖新闻综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXpinghu1/720p.m3u8?zzhed",
-      "logo": "https://live.fanmingming.cn/tv/平湖新闻综合.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
       "name": "平湖民生休闲",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXpinghu2/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXpinghu2/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/平湖民生休闲.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1446,8 +1509,15 @@
     },
     {
       "name": "庆元综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXqingyuan1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXqingyuan1/720p.m3u8?zzhed?",
       "logo": "https://live.fanmingming.cn/tv/庆元综合.png",
+      "group": "浙江频道",
+      "latency_ms": null
+    },
+    {
+      "name": "开化国家公园",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXkaihua2/720p.m3u8?zzhed#http://l.cztvcloud.com/channels/lantian/SXkaihua2/720p.m3u8zzhed#http://l.cztvcloud.com/channels/lantian/SXkaihua2/720p.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/开化国家公园.png",
       "group": "浙江频道",
       "latency_ms": null
     },
@@ -1474,15 +1544,8 @@
     },
     {
       "name": "文成综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXwencheng1/720p.m3u8?zzhed?",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXwencheng1/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/文成综合.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
-      "name": "新昌新闻综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXxinchang1/720p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/新昌新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
     },
@@ -1502,14 +1565,14 @@
     },
     {
       "name": "松阳综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXsongyang1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXsongyang1/720p.m3u8?zzhed?",
       "logo": "https://live.fanmingming.cn/tv/松阳综合.png",
       "group": "浙江频道",
       "latency_ms": null
     },
     {
       "name": "武义新闻综合",
-      "url": "http://l.cztvcloud.com/channels/lantian/SXwuyi1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXwuyi1/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/武义新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1544,7 +1607,7 @@
     },
     {
       "name": "浙江少儿",
-      "url": "https://ali-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8",
+      "url": "http://ali-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江少儿.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1557,13 +1620,6 @@
       "latency_ms": null
     },
     {
-      "name": "浙江教科影视",
-      "url": "https://ali-m-l.cztv.com/channels/lantian/channel004/1080p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/浙江教科影视.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
       "name": "浙江教育",
       "url": "http://ali-m-l.cztv.com/channels/lantian/channel04/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江教育.png",
@@ -1572,7 +1628,7 @@
     },
     {
       "name": "浙江数码时代",
-      "url": "http://ali-m-l.cztv.com/channels/lantian/channel12/720p.m3u8",
+      "url": "http://ali-m-l.cztv.com/channels/lantian/channel012/1080p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江数码时代.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1607,14 +1663,14 @@
     },
     {
       "name": "浙江经济",
-      "url": "http://ali-m-l.cztv.com/channels/lantian/channel003/1080p.m3u8",
+      "url": "http://ali-m-l.cztv.com/channels/lantian/channel03/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江经济.png",
       "group": "浙江频道",
       "latency_ms": null
     },
     {
       "name": "浙江经视",
-      "url": "https://ali-m-l.cztv.com/channels/lantian/channel003/1080p.m3u8",
+      "url": "http://ali-m-l.cztv.com/channels/lantian/channel003/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/浙江经视.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1669,13 +1725,6 @@
       "latency_ms": null
     },
     {
-      "name": "绍兴公共",
-      "url": "http://live.shaoxing.com.cn/video/s10001-sxtv2/index.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/绍兴公共.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
       "name": "缙云新闻综合",
       "url": "http://l.cztvcloud.com/channels/lantian/SXjinyun1/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/缙云新闻综合.png",
@@ -1690,22 +1739,8 @@
       "latency_ms": null
     },
     {
-      "name": "苍南新闻综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXcangnan1/720p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/苍南新闻综合.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
-      "name": "萧山新闻综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXxiaoshan1/720p.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/萧山新闻综合.png",
-      "group": "浙江频道",
-      "latency_ms": null
-    },
-    {
       "name": "萧山生活",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXxiaoshan2/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXxiaoshan2/720p.m3u8",
       "logo": "https://live.fanmingming.cn/tv/萧山生活.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1726,7 +1761,7 @@
     },
     {
       "name": "诸暨新闻综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXzhuji3/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXzhuji3/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/诸暨新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1761,14 +1796,14 @@
     },
     {
       "name": "龙游新闻综合",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXlongyou1/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXlongyou1/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/龙游新闻综合.png",
       "group": "浙江频道",
       "latency_ms": null
     },
     {
       "name": "龙游生活娱乐",
-      "url": "https://l.cztvcloud.com/channels/lantian/SXlongyou2/720p.m3u8",
+      "url": "http://l.cztvcloud.com/channels/lantian/SXlongyou2/720p.m3u8?zzhed",
       "logo": "https://live.fanmingming.cn/tv/龙游生活娱乐.png",
       "group": "浙江频道",
       "latency_ms": null
@@ -1777,13 +1812,6 @@
       "name": "武汉一台新闻综合",
       "url": "https://ls.qingting.fm/live/20198/64k.m3u8",
       "logo": "https://live.fanmingming.cn/tv/武汉一台新闻综合.png",
-      "group": "湖北频道",
-      "latency_ms": null
-    },
-    {
-      "name": "武汉文体",
-      "url": "http://www.hiliu.myds.me:18088/rtp/239.69.1.147:10518",
-      "logo": "https://live.fanmingming.cn/tv/武汉文体.png",
       "group": "湖北频道",
       "latency_ms": null
     },
@@ -1810,15 +1838,8 @@
     },
     {
       "name": "凤凰中文",
-      "url": "http://r.jdshipin.com/cCCzW",
-      "logo": "https://live.fanmingming.cn/tv/凤凰中文.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "凤凰中文高清",
       "url": "http://cdn6.163189.xyz/163189/fhzw",
-      "logo": "https://live.fanmingming.cn/tv/凤凰中文高清.png",
+      "logo": "https://live.fanmingming.cn/tv/凤凰中文.png",
       "group": "湖南频道",
       "latency_ms": null
     },
@@ -1830,37 +1851,9 @@
       "latency_ms": null
     },
     {
-      "name": "凤凰资讯台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=fhzx",
-      "logo": "https://live.fanmingming.cn/tv/凤凰资讯台.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "凤凰资讯高清",
-      "url": "http://cdn6.163189.xyz/163189/fhzx",
-      "logo": "https://live.fanmingming.cn/tv/凤凰资讯高清.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
       "name": "凤凰香港",
-      "url": "http://r.jdshipin.com/yDoTN",
-      "logo": "https://live.fanmingming.cn/tv/凤凰香港.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "凤凰香港台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=fhhk",
-      "logo": "https://live.fanmingming.cn/tv/凤凰香港台.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "凤凰香港高清",
       "url": "http://cdn6.163189.xyz/163189/fhhk",
-      "logo": "https://live.fanmingming.cn/tv/凤凰香港高清.png",
+      "logo": "https://live.fanmingming.cn/tv/凤凰香港.png",
       "group": "湖南频道",
       "latency_ms": null
     },
@@ -1872,44 +1865,9 @@
       "latency_ms": null
     },
     {
-      "name": "河南电视剧",
-      "url": "http://1.94.31.214/php/hntv.php?id=hndsj",
-      "logo": "https://live.fanmingming.cn/tv/河南电视剧.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "湖南电影",
-      "url": "http://php.jdshipin.com:8880/iptv.php",
-      "logo": "https://live.fanmingming.cn/tv/湖南电影.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "玄幻电影",
-      "url": "http://cdn.jdshipin.com:8880/huya.php?id=11342414",
-      "logo": "https://live.fanmingming.cn/tv/玄幻电影.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "甄子丹电影",
-      "url": "http://cdn.jdshipin.com:8880/huya.php?id=11352935",
-      "logo": "https://live.fanmingming.cn/tv/甄子丹电影.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
       "name": "福建电视剧",
       "url": "http://8.138.7.223/tv/fjtv1.php?id=fjdsj",
       "logo": "https://live.fanmingming.cn/tv/福建电视剧.png",
-      "group": "湖南频道",
-      "latency_ms": null
-    },
-    {
-      "name": "罪犯电影",
-      "url": "http://cdn.jdshipin.com:8880/huya.php?id=11352962",
-      "logo": "https://live.fanmingming.cn/tv/罪犯电影.png",
       "group": "湖南频道",
       "latency_ms": null
     },
@@ -2096,13 +2054,6 @@
       "latency_ms": null
     },
     {
-      "name": "福建公共",
-      "url": "https://live.264788.xyz/channel/fujianxiangcungonggong?streamid=1cf7fc3a8f6d160c33b43c2f9507a0cc&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk",
-      "logo": "https://live.fanmingming.cn/tv/福建公共.png",
-      "group": "福建频道",
-      "latency_ms": null
-    },
-    {
       "name": "福建少儿",
       "url": "http://8.138.7.223/tv/fjtv1.php?id=fjse",
       "logo": "https://live.fanmingming.cn/tv/福建少儿.png",
@@ -2125,7 +2076,7 @@
     },
     {
       "name": "福建经济",
-      "url": "http://8.138.7.223/tv/fjtv1.php?id=fjjj",
+      "url": "http://satellitepull.cnr.cn/live/wx32fjdnjjgb/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/福建经济.png",
       "group": "福建频道",
       "latency_ms": null
@@ -2153,14 +2104,14 @@
     },
     {
       "name": "安顺新闻",
-      "url": "https://ls.qingting.fm/live/5022203/64k.m3u8",
+      "url": "http://hplayer1.juyun.tv/camera/154379194.m3u8",
       "logo": "https://live.fanmingming.cn/tv/安顺新闻.png",
       "group": "贵州频道",
       "latency_ms": null
     },
     {
       "name": "辽宁公共",
-      "url": "http://120.76.248.139/live/bfgd/4200000077.m3u8",
+      "url": "http://120.76.248.139/live/bfgd/4200000481.m3u8",
       "logo": "https://live.fanmingming.cn/tv/辽宁公共.png",
       "group": "辽宁频道",
       "latency_ms": null
@@ -2278,6 +2229,13 @@
       "latency_ms": null
     },
     {
+      "name": "西宁新闻综合",
+      "url": "https://liveout.xntv.tv/a65jur/96iln2.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/西宁新闻综合.png",
+      "group": "青海频道",
+      "latency_ms": null
+    },
+    {
       "name": "七台河新闻综合",
       "url": "http://live.qthnews.org.cn:1935/live/live1/800k/tzwj_video.m3u8",
       "logo": "https://live.fanmingming.cn/tv/七台河新闻综合.png",
@@ -2327,6 +2285,13 @@
       "latency_ms": null
     },
     {
+      "name": "哈尔滨资讯",
+      "url": "http://stream.hrbtv.net/zxpd/sd/live.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/哈尔滨资讯.png",
+      "group": "黑龙江频道",
+      "latency_ms": null
+    },
+    {
       "name": "哈尔滨都市咨询",
       "url": "http://stream.hrbtv.net/zxpd/sd/live.m3u8?zheild",
       "logo": "https://live.fanmingming.cn/tv/哈尔滨都市咨询.png",
@@ -2348,13 +2313,6 @@
       "latency_ms": null
     },
     {
-      "name": "HOY TV",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=hoytv",
-      "logo": "https://live.fanmingming.cn/tv/HOY TV.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
       "name": "TVBS-Asia",
       "url": "http://38.64.72.148/hls/modn/list/4005/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/TVBS-Asia.png",
@@ -2372,20 +2330,6 @@
       "name": "TVBS新闻台",
       "url": "http://61.221.215.25:8800/hls/9/index.m3u8",
       "logo": "https://live.fanmingming.cn/tv/TVBS新闻台.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
-      "name": "TVB翡翠台",
-      "url": "http://cdn9.163189.xyz/smt1.1.php?id=jade_twn",
-      "logo": "https://live.fanmingming.cn/tv/TVB翡翠台.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
-      "name": "ViuTV",
-      "url": "http://r.jdshipin.com/vSJvl",
-      "logo": "https://live.fanmingming.cn/tv/ViuTV.png",
       "group": "港澳台频道",
       "latency_ms": null
     },
@@ -2418,13 +2362,6 @@
       "latency_ms": null
     },
     {
-      "name": "华丽翡翠台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=huali2",
-      "logo": "https://live.fanmingming.cn/tv/华丽翡翠台.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
       "name": "华视HD",
       "url": "https://raw.githubusercontent.com/ChiSheng9/iptv/master/TV12.m3u8",
       "logo": "https://live.fanmingming.cn/tv/华视HD.png",
@@ -2453,15 +2390,8 @@
       "latency_ms": null
     },
     {
-      "name": "无线新闻台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=wxxw",
-      "logo": "https://live.fanmingming.cn/tv/无线新闻台.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
       "name": "明珠台",
-      "url": "http://r.jdshipin.com/ZQ4kN",
+      "url": "http://cdn9.163189.xyz/smt1.1.php?id=pearl_twn",
       "logo": "https://live.fanmingming.cn/tv/明珠台.png",
       "group": "港澳台频道",
       "latency_ms": null
@@ -2475,7 +2405,7 @@
     },
     {
       "name": "纬来体育",
-      "url": "https://epg.pw/stream/ab6df63b64d0cc44a1f4f029ed847a26fa54a7aebd455578fb05a63f02c22f4b.m3u8",
+      "url": "https://epg.pw/stream/8855a9936e37e608a0ec8a014cce1673dee9c5d68d560da376cc92e5edef2b25.m3u8",
       "logo": "https://live.fanmingming.cn/tv/纬来体育.png",
       "group": "港澳台频道",
       "latency_ms": null
@@ -2489,37 +2419,16 @@
     },
     {
       "name": "翡翠台",
-      "url": "http://r.jdshipin.com/qClQf",
+      "url": "http://r.jdshipin.com/GeWKr",
       "logo": "https://live.fanmingming.cn/tv/翡翠台.png",
       "group": "港澳台频道",
       "latency_ms": null
     },
     {
-      "name": "翡翠台4K",
-      "url": "http://cdn6.163189.xyz/163189/fct4k",
-      "logo": "https://live.fanmingming.cn/tv/翡翠台4K.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
-      "name": "翡翠台北美版",
-      "url": "http://php.jdshipin.com:8880/TVOD/iptv.php?id=j1",
-      "logo": "https://live.fanmingming.cn/tv/翡翠台北美版.png",
-      "group": "港澳台频道",
-      "latency_ms": null
-    },
-    {
-      "name": "TVB星河",
-      "url": "http://r.jdshipin.com/Voac4",
-      "logo": "https://live.fanmingming.cn/tv/TVB星河.png",
+      "name": "笑傲江湖",
+      "url": "https://live.metshop.top/huya/26355790",
+      "logo": "https://live.fanmingming.cn/tv/笑傲江湖.png",
       "group": "文旅频道",
-      "latency_ms": null
-    },
-    {
-      "name": "TVB娱乐新闻台",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=tvbylxw",
-      "logo": "https://live.fanmingming.cn/tv/TVB娱乐新闻台.png",
-      "group": "新闻频道",
       "latency_ms": null
     },
     {
@@ -2538,7 +2447,7 @@
     },
     {
       "name": "新闻综合",
-      "url": "https://www.freetv.top/migu/651632657.m3u8?migutoken=b4a3e55048f55ec1c8fc5b509fbdf32f2dc5d255f5f218e79e84ca9a87fb9f2239927cb11b448f18285b50b81b4cd50a1354e9be5a3283375e85372798c3f3eb3ad60adf45eb5615f68eb4825f",
+      "url": "https://m3u8channel.yunxya.com/nmip-media/channellive/channel100028/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/新闻综合.png",
       "group": "新闻频道",
       "latency_ms": null
@@ -2558,15 +2467,8 @@
       "latency_ms": null
     },
     {
-      "name": "澳门体育",
-      "url": "http://cdn6.163189.xyz/163189/amty",
-      "logo": "https://live.fanmingming.cn/tv/澳门体育.png",
-      "group": "体育频道",
-      "latency_ms": null
-    },
-    {
       "name": "精品体育",
-      "url": "https://epg.pw/stream/94ed0232b61ce8d89883160a4cdfbfc8f3225cae70ef8e17d93eec249a3c8ad6.m3u8",
+      "url": "https://epg.pw/stream/866a097a0907c9832440f8df38272dd555abf05200dfbafcc137e214c9b30ca7.m3u8",
       "logo": "https://live.fanmingming.cn/tv/精品体育.png",
       "group": "体育频道",
       "latency_ms": null
@@ -2587,14 +2489,14 @@
     },
     {
       "name": "魅力足球",
-      "url": "https://www.freetv.top/migu/796070308.m3u8?migutoken=0a72668399c6f96d928c0bf0adbe330bbae95b55cfc10f2da9e830e2e06051b89a0e1db847eaa61f6b897e3efcb05ecc6160c2ce3c8073fb2d90c8ed191845e1ca16f6bcd3aaa13f6538d2074d",
+      "url": "https://www.freetv.top/migu/796070308.m3u8?migutoken=f4f71100ed3cd756f336e1f3b6d522c1338ee1ffd14316eea89e461d4e31e29395a265a9f1ec26b947fb0e7dc16296db47ae3bfea73caaee6901d17bfede63775878c0ab44c872939ba5b53baf",
       "logo": "https://live.fanmingming.cn/tv/魅力足球.png",
       "group": "体育频道",
       "latency_ms": null
     },
     {
       "name": "怀旧剧场",
-      "url": "http://173.208.212.130:8181/720p/hjjc.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/hjjc.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/怀旧剧场.png",
       "group": "影视频道",
       "latency_ms": null
@@ -2628,6 +2530,20 @@
       "latency_ms": null
     },
     {
+      "name": "中华小当家",
+      "url": "https://live.metshop.top/huya/11342413",
+      "logo": "https://live.fanmingming.cn/tv/中华小当家.png",
+      "group": "少儿动漫",
+      "latency_ms": null
+    },
+    {
+      "name": "海绵宝宝",
+      "url": "https://live.metshop.top/douyu/3949681",
+      "logo": "https://live.fanmingming.cn/tv/海绵宝宝.png",
+      "group": "少儿动漫",
+      "latency_ms": null
+    },
+    {
       "name": "韩国EBS少儿",
       "url": "http://ebsonairios.ebs.co.kr/ebsutablet500k/tablet500k/playlist.m3u8",
       "logo": "https://live.fanmingming.cn/tv/韩国EBS少儿.png",
@@ -2657,16 +2573,9 @@
     },
     {
       "name": "风云音乐",
-      "url": "http://173.208.212.130:8181/720p/fyyy.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/fyyy.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/风云音乐.png",
       "group": "音乐频道",
-      "latency_ms": null
-    },
-    {
-      "name": "澳门综艺",
-      "url": "http://cdn6.163189.xyz/163189/amzy",
-      "logo": "https://live.fanmingming.cn/tv/澳门综艺.png",
-      "group": "戏曲综艺",
       "latency_ms": null
     },
     {
@@ -2678,7 +2587,7 @@
     },
     {
       "name": "女性时尚",
-      "url": "http://173.208.212.130:8181/720p/nxss.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/nxss.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/女性时尚.png",
       "group": "生活购物",
       "latency_ms": null
@@ -2838,9 +2747,9 @@
       "latency_ms": null
     },
     {
-      "name": "Astro AOD",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=aod",
-      "logo": "https://live.fanmingming.cn/tv/Astro AOD.png",
+      "name": "Beautiful Life TV",
+      "url": "https://5ddce30eb4b55.streamlock.net/bltvhd/bltv1/playlist.m3u8",
+      "logo": "https://live.fanmingming.cn/tv/Beautiful Life TV.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -2855,34 +2764,6 @@
       "name": "CETV-1",
       "url": "http://198.204.228.26/live/cetv1hd.m3u8",
       "logo": "https://live.fanmingming.cn/tv/CETV-1.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "CGTN",
-      "url": "http://112.27.235.94:8000/hls/17/index.m3u8",
-      "logo": "https://live.fanmingming.cn/tv/CGTN.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "CH5",
-      "url": "https://cdn6.163189.xyz/163189/ch5",
-      "logo": "https://live.fanmingming.cn/tv/CH5.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "CH8",
-      "url": "https://cdn6.163189.xyz/163189/ch8",
-      "logo": "https://live.fanmingming.cn/tv/CH8.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "CHU",
-      "url": "https://cdn6.163189.xyz/163189/chu",
-      "logo": "https://live.fanmingming.cn/tv/CHU.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -2971,9 +2852,23 @@
       "latency_ms": null
     },
     {
-      "name": "TVB Plus",
-      "url": "http://r.jdshipin.com/Nr5jq",
-      "logo": "https://live.fanmingming.cn/tv/TVB Plus.png",
+      "name": "TVB News",
+      "url": "http://r.jdshipin.com/CkuBd",
+      "logo": "https://live.fanmingming.cn/tv/TVB News.png",
+      "group": "其他频道",
+      "latency_ms": null
+    },
+    {
+      "name": "七龙珠",
+      "url": "https://live.metshop.top/huya/11601966",
+      "logo": "https://live.fanmingming.cn/tv/七龙珠.png",
+      "group": "其他频道",
+      "latency_ms": null
+    },
+    {
+      "name": "三国演义",
+      "url": "https://live.metshop.top/huya/11602081",
+      "logo": "https://live.fanmingming.cn/tv/三国演义.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -2988,13 +2883,6 @@
       "name": "乐游频道",
       "url": "http://8.138.7.223/tv/shtv.php?id=ly",
       "logo": "https://live.fanmingming.cn/tv/乐游频道.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "亚洲武侠",
-      "url": "http://php.jdshipin.com/TVOD/iptv.php?id=yzwx",
-      "logo": "https://live.fanmingming.cn/tv/亚洲武侠.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -3034,23 +2922,9 @@
       "latency_ms": null
     },
     {
-      "name": "八度空间",
-      "url": "https://cdn6.163189.xyz/163189/8tv",
-      "logo": "https://live.fanmingming.cn/tv/八度空间.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
       "name": "兵器科技",
-      "url": "http://173.208.212.130:8181/720p/gfjs.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/gfjs.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/兵器科技.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "千禧经典",
-      "url": "http://cdn9.163189.xyz/smt3.1.1.php?id=Tvbclassic",
-      "logo": "https://live.fanmingming.cn/tv/千禧经典.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -3062,9 +2936,30 @@
       "latency_ms": null
     },
     {
+      "name": "天龙八部",
+      "url": "https://live.metshop.top/huya/20985816",
+      "logo": "https://live.fanmingming.cn/tv/天龙八部.png",
+      "group": "其他频道",
+      "latency_ms": null
+    },
+    {
       "name": "央视台球",
-      "url": "http://107.150.60.122/live/ystq.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/ystq.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/央视台球.png",
+      "group": "其他频道",
+      "latency_ms": null
+    },
+    {
+      "name": "封神榜",
+      "url": "https://live.metshop.top/huya/29465849",
+      "logo": "https://live.fanmingming.cn/tv/封神榜.png",
+      "group": "其他频道",
+      "latency_ms": null
+    },
+    {
+      "name": "射雕英雄传",
+      "url": "https://live.metshop.top/huya/23824164",
+      "logo": "https://live.fanmingming.cn/tv/射雕英雄传.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -3076,15 +2971,8 @@
       "latency_ms": null
     },
     {
-      "name": "我是特种兵之利刃出鞘",
-      "url": "https://live.ottiptv.cc/yy/37999586",
-      "logo": "https://live.fanmingming.cn/tv/我是特种兵之利刃出鞘.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
       "name": "文化精品",
-      "url": "http://173.208.212.130:8181/720p/ysjp.m3u8",
+      "url": "http://38.75.136.137:98/gslb/dsdqpub/ysjp.m3u8?auth=testpub",
       "logo": "https://live.fanmingming.cn/tv/文化精品.png",
       "group": "其他频道",
       "latency_ms": null
@@ -3111,23 +2999,9 @@
       "latency_ms": null
     },
     {
-      "name": "澳视卫星",
-      "url": "http://r.jdshipin.com/QFhCq",
-      "logo": "https://live.fanmingming.cn/tv/澳视卫星.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "澳视澳门",
-      "url": "http://r.jdshipin.com/n2YZI",
-      "logo": "https://live.fanmingming.cn/tv/澳视澳门.png",
-      "group": "其他频道",
-      "latency_ms": null
-    },
-    {
-      "name": "狂飙",
-      "url": "https://live.ottiptv.cc/yy/1355142167",
-      "logo": "https://live.fanmingming.cn/tv/狂飙.png",
+      "name": "漫画解说",
+      "url": "https://www.goodiptv.club/douyu/5907076",
+      "logo": "https://live.fanmingming.cn/tv/漫画解说.png",
       "group": "其他频道",
       "latency_ms": null
     },
@@ -3153,9 +3027,9 @@
       "latency_ms": null
     },
     {
-      "name": "象视界",
-      "url": "http://1.94.31.214/php/hntv.php?id=xsj",
-      "logo": "https://live.fanmingming.cn/tv/象视界.png",
+      "name": "西游记",
+      "url": "https://live.metshop.top/huya/26355861",
+      "logo": "https://live.fanmingming.cn/tv/西游记.png",
       "group": "其他频道",
       "latency_ms": null
     },
